@@ -1,0 +1,1039 @@
+/* ============================================================
+ * base.css —— 修仙版gooboo 通用框架样式（全游戏共享）
+ *
+ * 依据：gooboo-art-style.md（Material 扁平矢量 / 半透明灰卡 #80808020 /
+ *       3px 黑白描边卡 / 8 向 text-shadow 描边字 / 暗色半透明叠层 /
+ *       CSS 渐变主题 / premium 发光）
+ * 约束：零依赖、无外部字体/图片/图标，全部用内联系统实现。
+ * 职责：主题变量、应用栏、瓷砖导航、页面滚动、tabs、卡片、描边字、
+ *       进度条、货币/chip、按钮、升级卡、图标卡、统计卡、tooltip、
+ *       premium 发光、设置遮罩、通用工具与响应式。
+ * 注意：各玩法模块专属样式（如灵脉的深度导航）放在 modules/<mod>/ 下。
+ * ============================================================ */
+
+/* ---------- 0. 主题变量（default 主题，dark/light 通用） ---------- */
+:root {
+  --clr-primary: #1976D2;
+  --clr-secondary: #424242;
+  --clr-accent: #82B1FF;
+  --clr-info: #2196F3;
+  --clr-success: #4CAF50;
+  --clr-warning: #FFC107;
+  --clr-error: #FF5252;
+
+  --grey-black: #000000;
+  --grey-9: #202020;
+  --grey-8: #404040;
+  --grey-6: #9e9e9e;
+  --grey-3: #E0E0E0;
+  --grey-0: #FFFFFF;
+
+  --surface-tile: rgba(128, 128, 128, 0.13);
+  --surface-tile-solid: #80808020;
+  --surface-panel-dark: #12121280;
+  --surface-subtle: #80808060;
+  --surface-input: #121212;
+
+  --outline-strong: 3px solid var(--outline-color);
+  --shadow-elevation: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+/* 暗色主题（默认） */
+.theme-dark {
+  --text-main: #FFFFFF;
+  --text-sub: rgba(255, 255, 255, 0.6);
+  --text-dim: rgba(255, 255, 255, 0.5);
+  --outline-color: #FFFFFF;
+  --card-border: 3px solid #FFFFFF;
+  --card-border-thin: 2px solid #FFFFFF;
+  --appbar-bg: linear-gradient(#121212, #0e0e14);
+  --field-bg: #121212;
+  --bg-grad: radial-gradient(120% 80% at 50% 0%, #1a1a2e 0%, #121212 60%, #0b0b12 100%);
+  --tooltip-bg: #404040;
+  --tooltip-fg: #FFFFFF;
+  --divider: #FFFFFF30;
+}
+
+/* 浅色主题（天光）：白底黑字，卡片用白色半透明叠层 + 黑描边 */
+.theme-light {
+  --text-main: #000000;
+  --text-sub: rgba(0, 0, 0, 0.62);
+  --text-dim: rgba(0, 0, 0, 0.5);
+  --outline-color: #000000;
+  --card-border: 3px solid #000000;
+  --card-border-thin: 2px solid #000000;
+  --appbar-bg: linear-gradient(#FFFFFF, #F2F4F7);
+  --field-bg: #FFFFFF;
+  --bg-grad: radial-gradient(120% 80% at 50% 0%, #F4FAFF 0%, #EBF1F8 55%, #E0E7F0 100%);
+  --tooltip-bg: #FFFFFF;
+  --tooltip-fg: #000000;
+  --divider: rgba(0, 0, 0, 0.18);
+  --surface-tile: rgba(255, 255, 255, 0.65);
+  --surface-tile-solid: rgba(255, 255, 255, 0.7);
+  --surface-panel-dark: rgba(255, 255, 255, 0.75);
+  --surface-subtle: rgba(0, 0, 0, 0.06);
+  --surface-input: #FFFFFF;
+  --shadow-elevation: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- 1. 全局 ---------- */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: var(--text-main);
+  background: var(--bg-grad);
+  background-attachment: fixed;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+@media (min-width: 960px) { html { overflow-y: hidden; } }
+
+#app { height: 100vh; display: flex; flex-direction: column; }
+
+/* ---------- 2. 应用栏（64px） ---------- */
+.main-app-bar {
+  height: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: var(--appbar-bg);
+  border-bottom: 1px solid var(--divider);
+  z-index: 10;
+}
+.app-bar-title {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  margin-right: 12px;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-shadow: 0 0 6px rgba(130, 177, 255, 0.4);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+.app-bar-title:hover { background: var(--surface-tile); }
+.app-bar-title .gb-icon { color: var(--clr-accent); }
+.app-bar-title .home-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-sub);
+  cursor: pointer;
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+}
+.app-bar-title .home-btn:hover { color: var(--clr-accent); background: var(--surface-subtle); }
+.app-bar-spacer { flex: 1; }
+.app-bar-actions { display: flex; align-items: center; gap: 4px; }
+
+.app-bar-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-sub);
+  cursor: pointer;
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.app-bar-btn:hover { color: var(--text-main); background: var(--surface-tile); }
+
+/* ---------- 3. 图标 ---------- */
+.gb-icon { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+
+/* ---------- 4. 特质瓷砖导航（gooboo feature tile） ---------- */
+.tile-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 24px;
+  overflow-y: auto;
+}
+.feature-tile {
+  width: 200px; height: 120px;
+  border: var(--card-border);
+  border-radius: 12px;
+  background: var(--surface-tile-solid);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  position: relative;
+  color: var(--text-main);
+  transition: box-shadow 0.2s, background 0.2s;
+}
+.feature-tile:hover { background: var(--surface-subtle); }
+.feature-tile.locked { opacity: 0.35; cursor: not-allowed; }
+.feature-tile .tile-icon { font-size: 44px; line-height: 1; }
+.feature-tile .tile-label { font-size: 14px; font-weight: 500; letter-spacing: 1px; }
+.feature-tile .tile-desc { font-size: 10px; opacity: 0.5; text-align: center; padding: 0 8px; }
+.feature-tile .tile-lock { position: absolute; right: 8px; top: 6px; opacity: 0.5; }
+
+/* ---------- 5. 页面 / 滚动区 ---------- */
+.page { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.scroll-container { overflow-y: auto; flex: 1; }
+.scroll-container-tab { overflow-y: auto; max-height: calc(100vh - 112px); }
+.content-row { display: flex; }
+.col-3 { width: 25%; min-width: 0; }
+.col-4 { width: 33.33%; min-width: 0; }
+.col-6 { width: 50%; min-width: 0; }
+.col-9 { width: 75%; min-width: 0; }
+.col-12 { width: 100%; }
+
+/* ---------- 6. 顶部标签页（gooboo v-tabs） ---------- */
+.gb-tabs {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--divider);
+  background: var(--appbar-bg);
+}
+.gb-tab {
+  flex: 1;
+  padding: 14px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--text-sub);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+.gb-tab:hover { color: var(--text-main); }
+.gb-tab.active { color: var(--text-main); border-bottom-color: var(--clr-primary); }
+.gb-tab.active .gb-icon:not(.colored) { color: var(--text-main); }
+.gb-tab .gb-icon { opacity: 0.85; }
+.gb-tabs.sticky { position: sticky; top: 64px; z-index: 3; box-shadow: var(--shadow-elevation); }
+
+/* ---------- 7. 卡片 ---------- */
+.bg-tile { background: var(--surface-tile-solid); }
+.gb-card {
+  background: var(--surface-tile-solid);
+  border-radius: 8px;
+  margin: 8px;
+  padding: 12px;
+}
+.gb-card.bordered { border: var(--card-border-thin); }
+.hoverable { cursor: pointer; transition: box-shadow 0.2s, background 0.2s; }
+.hoverable:hover { background: var(--surface-subtle); }
+
+/* 特色小标题 */
+.feature-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.5;
+  margin-left: 16px;
+  margin-top: 12px;
+  margin-bottom: 4px;
+  color: var(--text-main);
+  font-weight: 400;
+}
+
+/* ---------- 8. 描边文字（balloon-text，8 向 text-shadow） ---------- */
+.css-shadow-2 .balloon, .css-shadow-2.theme-dark .balloon-d {
+  text-shadow: -1px 0 0 #000, 1px 0 0 #000, 0 -1px 0 #000, 0 1px 0 #000,
+    1px 1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, -1px -1px 0 #000,
+    0 0 1px #000, 0 0 2px #000, 0 0 3px #000, 0 0 4px #000;
+}
+.css-shadow-1 .balloon, .css-shadow-1.theme-dark .balloon-d {
+  text-shadow: -2px 0 0 #000, -1px -1px 0 #000, 0 -2px 0 #000, 1px -1px 0 #000,
+    2px 0 0 #000, 1px 1px 0 #000, 0 2px 0 #000, -1px 1px 0 #000;
+}
+.theme-dark .balloon-d { color: #fff; }
+.theme-light .balloon-d { color: #000; }
+.theme-light .css-shadow-2 .balloon-d, .theme-light .balloon.bright {
+  text-shadow: -1px 0 0 #fff, 1px 0 0 #fff, 0 -1px 0 #fff, 0 1px 0 #fff,
+    1px 1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, -1px -1px 0 #fff;
+}
+/* 天光专属：描边文字统一为「黑字 + 白色描边」，确保浅底可读 */
+.theme-light .css-shadow-1 .balloon,
+.theme-light .css-shadow-1 .balloon-d,
+.theme-light .css-shadow-2 .balloon,
+.theme-light .feature-title,
+.theme-light .stat-value,
+.theme-light .depth-val {
+  color: #000;
+  text-shadow: -1px 0 0 #fff, 1px 0 0 #fff, 0 -1px 0 #fff, 0 1px 0 #fff,
+    1px 1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, -1px -1px 0 #fff,
+    0 0 1px #fff, 0 0 2px #fff;
+}
+
+/* ---------- 9. 进度条（v-progress-linear 风格） ---------- */
+.gb-progress {
+  display: flex;
+  align-items: center;
+  position: relative;
+  height: 25px;
+  background: rgba(128,128,128,0.25);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.gb-progress .bar { height: 100%; transition: width 0.2s; border-radius: 4px; }
+.gb-progress .bar-label {
+  position: absolute; left: 0; right: 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  pointer-events: none;
+}
+.theme-light .gb-progress .bar-label { color: #000; }
+
+/* ---------- 10. 货币 / Chip ---------- */
+.currency-line {
+  display: flex;
+  align-items: center;
+  border: var(--card-border-thin);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 16px;
+  background: var(--surface-tile-solid);
+  gap: 6px;
+  margin: 4px;
+}
+.gb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 16px;
+  font-size: 14px;
+  margin: 4px;
+  background: var(--surface-tile-solid);
+  border: 1px solid var(--divider);
+  cursor: default;
+}
+.gb-chip.clickable { cursor: pointer; }
+.gb-chip.clickable:hover { filter: brightness(1.15); }
+
+/* 货币颜色（gooboo 色名 → hex，暗主题下取亮档） */
+.c-brown{color:#b97854}.c-blue-grey{color:#8eb0c8}.c-orange{color:#ffb74d}.c-grey{color:#bfbfbf}
+.c-deep-orange{color:#ff8a65}.c-pale-light-green{color:#dcedc8}.c-skyblue{color:#a8c4ff}
+.c-pale-purple{color:#d1c4e9}.c-pale-green{color:#c5e1a5}.c-pale-blue{color:#b3e5fc}
+.c-pale-orange{color:#ffe0b2}.c-darker-grey{color:#8a8a8a}.c-lighter-grey{color:#e0e0e0}
+.c-dark-grey{color:#b0b0b0}.c-pale-yellow{color:#ffeeba}.c-deep-purple{color:#b48cd8}
+.c-red{color:#ff6b5f}.c-green{color:#6fdc79}.c-yellow{color:#ffea4f}.c-cyan{color:#55e0e0}
+.c-pink{color:#f066ab}.c-lime{color:#d4ec52}.c-amber{color:#ffc93c}.c-indigo{color:#7d97f0}
+.c-primary{color:#4a90d9}.c-accent{color:#a3c2ff}.c-success{color:#6fdc79}.c-error{color:#ff6b5f}
+.c-warning{color:#ffc93c}.c-info{color:#55b4f0}
+
+/* ---------- 11. 按钮 ---------- */
+.gb-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #fff;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.gb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.gb-btn.primary { background: var(--clr-primary); }
+.gb-btn.success { background: var(--clr-success); }
+.gb-btn.error { background: var(--clr-error); }
+.gb-btn.grey { background: var(--grey-8); }
+.gb-btn.small { padding: 3px 10px; font-size: 12px; }
+.gb-btn.icon { padding: 6px; width: 34px; height: 34px; justify-content: center; background: var(--surface-subtle); }
+.gb-btn.ghost { background: transparent; color: var(--text-main); border: var(--card-border-thin); }
+
+/* ---------- 12. 升级项 / 秘法列表（展开 + 折叠双态） ---------- */
+.upg-card {
+  position: relative;
+  margin: 6px 8px;
+  border-radius: 10px;
+  background: var(--surface-tile-solid);
+  border: 1px solid transparent;
+  transition: border-color .15s ease;
+}
+.upg-card.can { border-color: rgba(111, 220, 121, 0.5); }
+.upg-card.can:hover { border-color: rgba(111, 220, 121, 0.8); }
+.upg-card.maxed { opacity: 0.5; }
+
+/* === 折叠态（紧凑一行） === */
+.upg-card.upg-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.upg-card.upg-collapsed .upg-collapsed-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upg-card.upg-collapsed .upg-collapsed-price {
+  font-size: 11px;
+  opacity: 0.55;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+}
+.upg-card.upg-collapsed .upg-toggle-btn { padding: 2px; }
+
+/* === 展开态（完整卡片） === */
+.upg-card.upg-expanded {
+  padding: 12px 14px 10px 14px;
+  padding-top: 12px;
+}
+.upg-card.upg-expanded .upg-toggle-btn.top-right {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px;
+}
+
+/* 卡片头部：等级 chip + 标题 */
+.upg-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-right: 28px; /* 给右上折叠按钮留空间 */
+}
+.upg-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+/* 等级 chip（带图标 + 背景） */
+.upg-level-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(130, 177, 255, 0.15);
+  color: #a3c2ff;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+/* 效果对比区：四列等宽 */
+.upg-effects {
+  margin: 6px 0 8px 0;
+  padding: 6px 8px;
+  background: var(--surface-subtle);
+  border-radius: 6px;
+}
+.upg-effect-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.upg-effect-label {
+  color: var(--text-dim);
+  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.upg-effect-before {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+  text-align: right;
+}
+.upg-effect-row svg {
+  display: inline-block;
+  color: var(--text-dim);
+  opacity: 0.7;
+  justify-self: center;
+}
+.upg-effect-after {
+  color: var(--text-main);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.upg-effect-value {
+  font-weight: 500;
+}
+
+/* MAX / 批量按钮：与参悟按钮样式一致（继承 .gb-btn .primary，无额外样式） */
+.upg-btn-max { }
+
+/* 卡片底部：价格 + 按钮 */
+.upg-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(128,128,128,0.2);
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.upg-footer .upg-price {
+  flex: 1;
+  font-size: 12px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* 折叠/展开切换按钮 */
+.upg-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  padding: 0;
+  transition: background .15s ease, color .15s ease;
+}
+.upg-toggle-btn:hover {
+  background: var(--surface-subtle);
+  color: var(--text-main);
+}
+
+/* 飞升后保留锁图标 */
+.upg-lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 193, 7, 0.1);
+  color: #ffc107;
+}
+
+/* 顶部 requirement 提示条 */
+.upg-req-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px;
+  margin: 2px 8px 8px 8px;
+  background: rgba(130, 177, 255, 0.08);
+  border-radius: 8px;
+  border: 1px dashed rgba(130, 177, 255, 0.3);
+}
+.upg-req-bar .req-chip {
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(130, 177, 255, 0.12);
+  border-radius: 10px;
+  color: #a3c2ff;
+  font-weight: 500;
+}
+
+/* 标签角标（保持兼容） */
+.gb-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(130,177,255,.15);
+  color: #a3c2ff;
+  margin-left: 4px;
+  letter-spacing: 0.5px;
+  vertical-align: 1px;
+}
+.gb-tag.prestige { background: rgba(199,110,255,.15); color: #c97dff; }
+.gb-tag.gold { background: rgba(255,201,60,.15); color: #ffc93c; }
+
+/* --- 旧版 upg-card 子元素样式（兼容 village 等其他模块） --- */
+.upg-card .upg-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.upg-card .upg-name { font-size: 14px; font-weight: 500; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+.upg-card .upg-desc { font-size: 11px; opacity: 0.6; margin-top: 2px; }
+.upg-card .upg-price { font-size: 12px; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 6px; }
+.upg-card .upg-level { font-size: 13px; font-weight: 500; opacity: 0.8; white-space: nowrap; }
+
+/* ---------- 13. 图标卡（icon-card-container 复刻） ---------- */
+.icon-card {
+  position: relative;
+  width: 64px; height: 64px;
+  display: flex; justify-content: center; align-items: center;
+  background: var(--surface-tile-solid);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.icon-card .tag { position: absolute; right: 2px; bottom: -3px; font-size: 14px; font-weight: 500; color: var(--text-main); }
+.icon-card .tag-up { position: absolute; right: 2px; top: -3px; font-size: 14px; font-weight: 500; color: var(--text-main); }
+.icon-card.no-beacon { opacity: 0.1; }
+
+/* ---------- 14. 状态统计卡 ---------- */
+.stat-tile {
+  background: var(--surface-tile-solid);
+  border-radius: 6px;
+  margin: 4px;
+  padding: 8px 12px;
+  flex-grow: 1;
+  display: flex; align-items: center; gap: 8px;
+  cursor: help;
+}
+.stat-tile .stat-value { font-size: 15px; font-weight: 500; color: var(--text-main); }
+
+/* ---------- 15. Tooltip ---------- */
+.gb-tooltip {
+  position: fixed;
+  z-index: 2000;
+  min-width: 220px;
+  max-width: 340px;
+  padding: 10px 12px;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-fg);
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+  pointer-events: none;
+}
+.gb-tooltip h3 { margin: 0 0 4px; font-size: 14px; text-align: center; }
+.gb-tooltip .tt-row { margin-top: 4px; display: flex; justify-content: space-between; gap: 10px; }
+
+/* ---------- 16. premium 发光（复刻 gooboo） ---------- */
+@keyframes premium-glow-1 {
+  0%{box-shadow:0 1px 6px #FF5252}20%{box-shadow:0 2px 12px #FF5722}
+  40%{box-shadow:0 1px 6px #FF5252}60%{box-shadow:0 2px 12px #E91E63}
+  80%{box-shadow:0 1px 6px #FF5252}100%{box-shadow:0 2px 12px #FF5252}
+}
+.premium-glow-1 { animation: premium-glow-1 15s linear infinite; }
+@keyframes premium-glow-2 {
+  0%{box-shadow:0 1px 6px #00BCD4}30%{box-shadow:0 2px 12px #55B4F0}60%{box-shadow:0 1px 6px #4DB6AC}100%{box-shadow:0 2px 12px #00BCD4}
+}
+.premium-glow-2 { animation: premium-glow-2 15s linear infinite; }
+
+/* ---------- 17. 顶部抽屉 / 设置遮罩 ---------- */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.modal {
+  width: min(560px, 92vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--appbar-bg);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--divider);
+}
+.modal h2 { margin: 0 0 12px; font-size: 18px; color: var(--text-main); }
+.modal .set-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--divider);
+  color: var(--text-main); font-size: 14px;
+}
+.modal .close-x { float: right; background: none; border: none; color: var(--text-main); cursor: pointer; padding: 4px; }
+
+/* ---------- 18. 幽灵占位动画 / 主体刻度 ---------- */
+.mute { opacity: 0.5; }
+.dim { opacity: 0.35; }
+.center { text-align: center; }
+
+/* 主题切换按钮小色块 */
+.theme-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--outline-color); cursor: pointer; }
+.theme-dot.sel { outline: 2px solid var(--clr-primary); outline-offset: 2px; }
+
+/* 秘法图标尺寸调整 */
+.icon-sm { font-size: 16px; }
+.mono { font-family: ui-monospace, Consolas, monospace; }
+
+/* ---------- 19. 空态 / 徽标 ---------- */
+.empty-hint { text-align: center; padding: 20px; font-size: 12px; opacity: 0.5; color: var(--text-main); }
+
+/* 解锁弹层 */
+.badge-flash { color: #ffea4f; text-shadow: 0 0 8px #ffc93c; }
+
+/* 小工具 */
+.hstack { display: flex; align-items: center; gap: 6px; }
+.hwrap { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.flex1 { flex: 1; min-width: 0; }
+.mt8 { margin-top: 8px; } .mt16 { margin-top: 16px; } .mt32 { margin-top: 32px; }
+.mx4 { margin: 0 4px; }
+.right { margin-left: auto; }
+.center-flex { display: flex; justify-content: center; align-items: center; }
+.grow { flex-grow: 1; }
+
+/* 响应式：窄屏单列 */
+@media (max-width: 960px) {
+  .content-row { flex-direction: column; }
+  .col-3, .col-4, .col-6 { width: 100%; }
+}
+
+
+
+/* Landing Page —— 修仙意境版
+ * 月景远山 + 飘动云雾 + 灵气上飘 + 八卦太极 + 紫金紫气东来
+ */
+.landing {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg,
+    #0a0a1a 0%,
+    #12102e 25%,
+    #1a1640 50%,
+    #0d1a2e 80%,
+    #081018 100%);
+}
+
+/* ========== 月景天空 ========== */
+.landing-sky {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+/* 月亮 */
+.landing-moon {
+  position: absolute;
+  top: 12%;
+  right: 18%;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff8e1 0%, #f5e9c8 50%, rgba(245,233,200,0.3) 80%, transparent 100%);
+  box-shadow:
+    0 0 40px rgba(255, 248, 225, 0.4),
+    0 0 80px rgba(255, 248, 225, 0.2),
+    0 0 120px rgba(155, 127, 255, 0.15);
+  animation: landing-moon-glow 8s ease-in-out infinite;
+}
+@keyframes landing-moon-glow {
+  0%, 100% { box-shadow: 0 0 40px rgba(255,248,225,0.4), 0 0 80px rgba(255,248,225,0.2); }
+  50% { box-shadow: 0 0 60px rgba(255,248,225,0.55), 0 0 120px rgba(255,248,225,0.3); }
+}
+
+/* 远山剪影（三层） */
+.landing-mountains {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+.landing-m-far {
+  height: 35%;
+  background: #0d1020;
+  clip-path: polygon(0 100%,
+    0 70%, 5% 65%, 10% 80%, 15% 60%, 22% 75%, 28% 55%, 35% 72%, 42% 50%, 50% 68%, 58% 58%, 65% 75%, 72% 52%, 80% 70%, 88% 62%, 95% 78%, 100% 65%,
+    100% 100%);
+  opacity: 0.7;
+}
+.landing-m-mid {
+  height: 25%;
+  background: #060810;
+  clip-path: polygon(0 100%,
+    0 85%, 6% 70%, 12% 82%, 20% 65%, 28% 80%, 36% 58%, 45% 75%, 54% 62%, 62% 78%, 70% 55%, 78% 72%, 86% 60%, 94% 76%, 100% 68%,
+    100% 100%);
+  opacity: 0.9;
+}
+.landing-m-near {
+  height: 15%;
+  background: #030408;
+  clip-path: polygon(0 100%,
+    0 90%, 8% 78%, 16% 88%, 25% 72%, 34% 85%, 42% 75%, 50% 82%, 58% 70%, 66% 86%, 75% 74%, 84% 82%, 92% 76%, 100% 85%,
+    100% 100%);
+}
+
+/* ========== 飘动云雾（多层椭圆叠加，柔化不规则） ========== */
+.landing-clouds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.landing-cloud {
+  position: absolute;
+  width: 320px;
+  height: 100px;
+  background:
+    radial-gradient(ellipse 160% 100% at 30% 50%, rgba(180,160,220,0.38) 0%, transparent 60%),
+    radial-gradient(ellipse 120% 80% at 70% 40%, rgba(200,180,240,0.28) 0%, transparent 70%),
+    radial-gradient(ellipse 100% 60% at 50% 60%, rgba(155,127,255,0.22) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(24px);
+  animation: landing-cloud-drift linear infinite;
+}
+@keyframes landing-cloud-drift {
+  0% { transform: translateX(-35vw); }
+  100% { transform: translateX(135vw); }
+}
+
+/* ========== 稀疏星光 ========== */
+.landing-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.landing-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.6;
+  animation: landing-twinkle ease-in-out infinite alternate;
+}
+@keyframes landing-twinkle {
+  0% { opacity: 0.2; transform: scale(0.8); }
+  100% { opacity: 0.85; transform: scale(1.15); }
+}
+
+/* ========== 灵气光点上飘 ========== */
+.landing-lingqi {
+  position: absolute;
+  bottom: -20px;
+  left: 0;
+  right: 0;
+  height: 120%;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+}
+.landing-lq {
+  position: absolute;
+  bottom: 0;
+  border-radius: 50%;
+  animation: landing-lq-rise linear infinite;
+}
+@keyframes landing-lq-rise {
+  0% { transform: translateY(0) scale(1); opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.6; }
+  100% { transform: translateY(-110vh) scale(0.3); opacity: 0; }
+}
+
+/* ========== 中央道法轮盘 ========== */
+.landing-dao {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 280px;
+  height: 280px;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.6;
+}
+/* 外圈八卦符文 */
+.landing-bagua {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0; height: 0;
+  font-family: "STKaiti","KaiTi",serif;
+  font-size: 22px;
+  color: rgba(155, 127, 255, 0.7);
+  animation: landing-bagua-spin 50s linear infinite;
+}
+.landing-bagua-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  display: inline-block;
+  filter: drop-shadow(0 0 4px rgba(155, 127, 255, 0.5));
+}
+@keyframes landing-bagua-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+/* 中圈 */
+.landing-dao-mid {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 180px; height: 180px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px dashed rgba(199, 110, 255, 0.25);
+  animation: landing-mid-spin 40s linear infinite reverse;
+}
+/* 内圈太极（SVG 阴阳鱼，20s 自转） */
+.landing-taiji {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 100px; height: 100px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  overflow: hidden;
+  animation: landing-taiji-spin 20s linear infinite;
+  box-shadow: 0 0 30px rgba(155, 127, 255, 0.35);
+  background: transparent;
+}
+@keyframes landing-mid-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+@keyframes landing-taiji-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ========== 中央主区域 ========== */
+.landing-center {
+  position: relative;
+  z-index: 5;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+}
+
+/* ========== 主标题（紫金紫气东来 + 扫光） ========== */
+.landing-title {
+  position: relative;
+  font-size: 72px;
+  font-weight: 800;
+  letter-spacing: 8px;
+  margin: 0 0 48px 0;
+  line-height: 1;
+}
+.landing-title-text {
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(90deg,
+    #9b7fff 0%,
+    #e0bfff 25%,
+    #ffd700 50%,
+    #e0bfff 75%,
+    #9b7fff 100%);
+  background-size: 200% 100%;
+  animation: landing-title-flow 8s linear infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 20px rgba(155, 127, 255, 0.55));
+}
+@keyframes landing-title-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* ========== 按钮组 ========== */
+.landing-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.landing-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 40px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 2px;
+  transition: transform 0.2s, box-shadow 0.25s, filter 0.2s;
+  font-family: inherit;
+  user-select: none;
+  overflow: hidden;
+}
+.landing-btn:hover { filter: brightness(1.12); transform: translateY(-3px); }
+.landing-btn:active { transform: translateY(0); }
+
+.landing-btn-primary {
+  background: linear-gradient(135deg, #6a4fcf 0%, #4a2fb0 50%, #ffd700 150%);
+  color: #fff;
+  box-shadow: 0 4px 28px rgba(155, 127, 255, 0.5), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.landing-btn-primary:hover {
+  box-shadow: 0 8px 40px rgba(155, 127, 255, 0.75), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.landing-btn-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%);
+  animation: landing-btn-sweep 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes landing-btn-sweep {
+  0% { left: -60%; }
+  70% { left: 120%; }
+  100% { left: 120%; }
+}
+
+.landing-btn-secondary {
+  background: rgba(155, 127, 255, 0.08);
+  color: var(--text-main);
+  border: 1px solid rgba(155, 127, 255, 0.3);
+  backdrop-filter: blur(4px);
+}
+.landing-btn-secondary:hover {
+  box-shadow: 0 4px 20px rgba(155, 127, 255, 0.25);
+  border-color: rgba(155, 127, 255, 0.6);
+}
+
+
+/* 响应式：窄屏适配 */
+@media (max-width: 640px) {
+  .landing-title { font-size: 44px; letter-spacing: 4px; margin-bottom: 36px; }
+  .landing-rings { width: 380px; height: 380px; }
+  .landing-ring-1 { width: 180px; height: 180px; }
+  .landing-ring-2 { width: 280px; height: 280px; }
+  .landing-ring-3 { width: 380px; height: 380px; }
+  .landing-btn { padding: 12px 28px; font-size: 14px; letter-spacing: 1px; }
+  .landing-floater { opacity: 0.22; }
+}
+/* 响应式 */
+@media (max-width: 640px) {
+  .landing-title { font-size: 44px; letter-spacing: 4px; margin-bottom: 36px; }
+  .landing-dao { width: 200px; height: 200px; }
+  .landing-bagua-item { font-size: 16px; }
+  .landing-mid { width: 130px; height: 130px; }
+  .landing-taiji { width: 70px; height: 70px; }
+  .landing-moon { width: 50px; height: 50px; }
+  .landing-btn { padding: 12px 28px; font-size: 14px; letter-spacing: 1px; }
+}

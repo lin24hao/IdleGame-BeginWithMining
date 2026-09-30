@@ -1,0 +1,106 @@
+/* ============================================================
+ * vill.css ——「宗门（village）」模块专属样式
+ * 通用框架（app-bar/瓷砖/面板/upg-card/gb-btn 等）见 css/base.css。
+ * 这里只补宗门 UI 需要的少量类，避免与公共样式冲突。
+ * ============================================================ */
+
+/* 更小的按钮（建筑/职司/政策条上用） */
+.gb-btn.tiny { padding: 1px 6px; font-size: 11px; border-radius: 3px; }
+.gb-btn.gold { background: linear-gradient(135deg, #f5c542, #c98a1b); color: #1a1a1a; font-weight: 600; }
+
+/* 建筑卡片墙（可换行排布） */
+.warp-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.warp-list .upg-card { min-width: 168px; flex: 1 1 168px; align-items: center; gap: 8px; }
+
+/* 职司内奖励提示的小字 */
+.job-reward { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+
+/* 状态栏小分组标题 */
+.feature-title.sub { margin-top: 10px; font-size: 13px; }
+
+/* 宗门材色补全（base.css 未收录的少数色） */
+.c-wooden{color:#8a6d4b}.c-blue{color:#5cb8e8}.c-light-blue{color:#82d0f0}
+.c-cherry{color:#e08a8a}.c-red-orange{color:#ff7b54}.c-pink-purple{color:#e590d0}
+.c-light-grey{color:#d0d0d0}.c-gold{color:#ffc93c}
+
+@media (max-width: 900px) {
+  .warp-list .upg-card { flex: 1 1 100%; }
+}
+
+/* ============================================================
+   完全复刻 gooboo Vuetify 组件观感（v-btn / v-chip / v-card / 进度条 / 货币胶囊）
+   ============================================================ */
+
+/* ---------- v-btn 复刻 ---------- */
+.gb-vbtn {
+  display:inline-flex; align-items:center; justify-content:center;
+  height:36px; min-width:64px; padding:0 16px; border-radius:4px;
+  font-size:14px; font-weight:500; letter-spacing:.09em; text-transform:uppercase;
+  border:none; cursor:pointer; color:#fff; line-height:1; user-select:none;
+  box-shadow:0 3px 1px -2px rgba(0,0,0,.25),0 2px 2px 0 rgba(0,0,0,.14),0 1px 5px 0 rgba(0,0,0,.12);
+  transition:.28s box-shadow,.28s background;
+}
+.gb-vbtn:hover:not(.disabled){box-shadow:0 5px 5px -3px rgba(0,0,0,.25),0 8px 10px 1px rgba(0,0,0,.14),0 3px 14px 2px rgba(0,0,0,.12);}
+.gb-vbtn:active:not(.disabled){box-shadow:none;}
+.gb-vbtn.small{height:28px;min-width:64px;padding:0 12px;font-size:13px;}
+/* 职司加减：gooboo 图标方钮，minButtonSize 32px */
+.gb-vbtn.icon{height:32px;min-width:32px;width:32px;padding:0;box-shadow:none;border-radius:4px;}
+.gb-vbtn.primary{background:#6153cc;}
+.gb-vbtn.success{background:#43a047;}
+.gb-vbtn.error{background:#e53935;}
+.gb-vbtn.gold{background:linear-gradient(135deg,#f5c542,#c98a1b);color:#1a1a1a;}
+.gb-vbtn.grey{background:#3a3a46;}
+.gb-vbtn.disabled{opacity:.4;cursor:default;box-shadow:none;}
+
+/* ---------- v-chip 复刻 ---------- */
+.gb-chip{
+  display:inline-flex; align-items:center; height:24px; padding:0 10px; border-radius:12px;
+  font-size:12px; background:rgba(255,255,255,.12); color:#eee; margin-left:4px; white-space:nowrap;
+}
+.gb-chip.small{height:20px;padding:0 8px;font-size:11px;}
+
+/* ---------- v-card 复刻（宗门各卡片） ---------- */
+.vi-card{background:#1b1c22;border-radius:4px;box-shadow:0 2px 4px -1px rgba(0,0,0,.25),0 4px 5px 0 rgba(0,0,0,.14),0 1px 10px 0 rgba(0,0,0,.12);margin-bottom:8px;}
+
+/* ---------- 职司列表顺序卡（Job.vue：两列 + 4 个图标方钮） ---------- */
+.vi-job{display:flex;align-items:center;padding:6px 8px 6px 12px;gap:8px;}
+.vi-job + .vi-job{border-top:1px solid rgba(255,255,255,.06);}
+.vi-job-name{width:33%;min-width:0;padding-right:6px;font-size:14px;color:#eee;flex:1;}
+.vi-job-ctrl{display:flex;align-items:center;justify-content:flex-end;gap:6px;}
+.vi-job-count{display:inline-flex;align-items:center;font-size:15px;color:#eee;white-space:nowrap;padding:0 6px;}
+.vi-job-count .dim{opacity:.6;}
+
+/* 村民摘要小卡（JobList 顶部） */
+.vi-jobsummary{display:flex;gap:14px;padding:10px 12px;align-items:center;color:#ccc;}
+.vi-jobsummary .st{display:flex;flex-direction:column;line-height:1.2;font-size:12px;}
+.vi-jobsummary .st b{font-size:15px;color:#eee;font-weight:600;}
+
+/* ---------- 资源数货币胶囊（Currency.vue：flex-wrap，材质色底 + 进度条） ---------- */
+.vi-resources{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 8px;}
+.vi-resgrp{text-align:center;font-size:12px;color:rgba(255,255,255,.5);margin:10px 0 2px;}
+.vi-currency{position:relative;display:flex;align-items:center;gap:8px;height:44px;padding:8px 8px;border-radius:4px;color:#fff;box-sizing:border-box;}
+.vi-currency.small{width:210px;font-size:16px;}
+.vi-currency.large{width:380px;font-size:16px;margin:0 auto;}
+.vi-currency .vi-ic{display:inline-flex;align-items:center;flex:none;}
+.vi-currency-bar{flex:1;position:relative;height:24px;border-radius:4px;overflow:hidden;background:rgba(0,0,0,.35);box-sizing:border-box;}
+.vi-currency-fill{position:absolute;top:0;left:0;bottom:0;width:0%;background:rgba(255,255,255,.3);}
+.vi-currency-val{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#fff;text-align:center;line-height:1;z-index:2;}
+.vi-currency .vi-gain{flex:none;display:inline-flex;align-items:center;font-size:12px;opacity:.9;}
+
+/* ---------- 升级 / 建筑卡片（Upgrade.vue 展开态：标题 + 价格tags + 动作条） ---------- */
+.vi-upg{padding:6px;}
+.vi-upg-title{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:15px;color:#eee;font-weight:500;}
+.vi-upg-title .name{flex:1;min-width:0;}
+.vi-upg-body{padding:2px 8px 6px;}
+.vi-price{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:#bbb;}
+.vi-price .tag{display:inline-flex;align-items:center;gap:5px;}
+.vi-price .dim{opacity:.6;}
+.vi-upg-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:10px;}
+.vi-upg-actions .spacer{flex:1;}
+
+/* 建造队列（UpgradeQueue.vue） */
+.vi-queue{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px;}
+.vi-queue-item{display:inline-flex;align-items:center;gap:5px;}
+.vi-bar{position:relative;height:20px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.1);margin-top:8px;}
+.vi-bar-fill{position:absolute;top:0;bottom:0;left:0;background:#7e57c2;}
+.vi-bar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;}

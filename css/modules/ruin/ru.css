@@ -1,0 +1,238 @@
+/* ============================================================
+ * ru.css —— 秘境（ruin）模块专属样式
+ * 复用 base.css 的主题变量（--text-main / --surface-* / --card-border-thin 等），
+ * 适配 theme-dark / theme-light，布局按 375×667 竖屏设计。
+ * ============================================================ */
+.ru-page { padding: 0 8px 24px; }
+
+/* ---------- 顶部资源条（sticky） ---------- */
+.ru-top {
+  position: sticky; top: 0; z-index: 4;
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 -8px 6px;
+  padding: 6px 12px;
+  background: var(--appbar-bg);
+  border-bottom: 1px solid var(--divider);
+  font-size: 13px;
+}
+.ru-top .ru-stone { display: inline-flex; align-items: center; gap: 4px; }
+.ru-top .ru-stone b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.ru-clock {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; opacity: 0.65; font-variant-numeric: tabular-nums;
+}
+
+/* 页签角标 */
+.ru-badge {
+  margin-left: 5px; padding: 0 6px; border-radius: 9px;
+  font-size: 11px; font-style: normal; font-weight: 600;
+  background: var(--clr-primary); color: #fff; line-height: 16px;
+}
+
+/* ---------- 区块 / 小标题 ---------- */
+.ru-sec { margin: 10px 0 4px; }
+.ru-sec-title {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.5px;
+  color: var(--text-main); opacity: 0.9;
+  padding: 2px 2px 6px;
+}
+.ru-sec-title em { font-style: normal; font-size: 11px; opacity: 0.55; font-weight: 400; }
+.ru-sec-title .gb-icon { color: var(--clr-accent); }
+.ru-sub-title { font-size: 11px; opacity: 0.6; margin: 8px 0 4px; }
+.ru-hint { font-size: 11px; line-height: 1.6; color: var(--text-dim); margin-top: 5px; }
+.ru-desc { font-size: 11px; line-height: 1.65; color: var(--text-dim); margin-top: 6px; }
+
+/* ---------- 选择芯片（弟子 / 时长 / 神器 / 批量出售） ---------- */
+.ru-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ru-chip {
+  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  background: var(--surface-tile-solid);
+  color: var(--text-main);
+  font-size: 12px; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.ru-chip:hover { background: var(--surface-subtle); }
+.ru-chip.on { border-color: var(--clr-primary); background: rgba(25, 118, 210, 0.18); }
+.ru-chip.dis { opacity: 0.4; cursor: not-allowed; }
+.ru-chip em { font-style: normal; font-size: 10px; opacity: 0.6; }
+.ru-chip .ru-disc-name { font-weight: 600; }
+.ru-disc .ru-st { font-style: normal; font-size: 10px; opacity: 0.75; }
+.ru-st-idle { color: #6fdc79; }
+.ru-st-dispatched { color: #ffc93c; }
+.ru-st-awaiting { color: #4a90d9; }
+.ru-st-needRevive { color: #ff6b5f; }
+.ru-art-chip { flex-direction: row; align-items: center; gap: 5px; }
+
+/* ---------- 下拉 / 数字输入 ---------- */
+.ru-select {
+  width: 100%; padding: 7px 8px; font-size: 13px;
+  color: var(--text-main); background: var(--field-bg);
+  border: var(--card-border-thin); border-radius: 8px;
+}
+.ru-select-sm { width: auto; flex: 1; min-width: 0; padding: 4px 6px; font-size: 11px; }
+.ru-num-in {
+  width: 62px; padding: 4px 6px; font-size: 11px;
+  color: var(--text-main); background: var(--field-bg);
+  border: var(--card-border-thin); border-radius: 6px;
+  font-variant-numeric: tabular-nums; text-align: right;
+}
+
+/* ---------- 信息表（键值行） ---------- */
+.ru-info {
+  margin-top: 6px; padding: 6px 8px;
+  background: var(--surface-subtle); border-radius: 8px;
+}
+.ru-info-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 3px 0; font-size: 11.5px;
+}
+.ru-info-row > span:first-child { color: var(--text-dim); flex-shrink: 0; }
+.ru-info-row > b { font-weight: 500; text-align: right; }
+
+/* ---------- 难度标签（4 档） ---------- */
+.ru-diff {
+  flex-shrink: 0; font-size: 10px; font-weight: 500;
+  padding: 1px 8px; border-radius: 9px; white-space: nowrap; line-height: 1.6;
+}
+.ru-diff-easy    { background: rgba(76, 175, 80, 0.18);  color: #6fdc79; }
+.ru-diff-normal  { background: rgba(25, 118, 210, 0.18); color: #7d97f0; }
+.ru-diff-hard    { background: rgba(255, 193, 7, 0.18);  color: #ffc93c; }
+.ru-diff-extreme { background: rgba(255, 82, 82, 0.18);  color: #ff6b5f; }
+.theme-light .ru-diff-easy    { color: #2e7d32; }
+.theme-light .ru-diff-normal  { color: #1565c0; }
+.theme-light .ru-diff-hard    { color: #9a6c00; }
+.theme-light .ru-diff-extreme { color: #c62828; }
+
+/* ---------- 品质色点 ---------- */
+.ru-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  display: inline-block; flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+}
+.ru-q-white  { background: #cfcfcf; }
+.ru-q-green  { background: #6fdc79; }
+.ru-q-blue   { background: #4a90d9; }
+.ru-q-purple { background: #b48cd8; }
+.ru-q-orange { background: #ffb74d; }
+.ru-q-red    { background: #ff5252; }
+
+/* ---------- 卡片 ---------- */
+.ru-card {
+  padding: 9px 11px; margin-bottom: 8px;
+  border: var(--card-border-thin); border-radius: 11px;
+  background: var(--surface-tile-solid); color: var(--text-main);
+  font-size: 12px;
+}
+.ru-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ru-bar {
+  height: 7px; margin: 6px 0 4px;
+  background: rgba(128, 128, 128, 0.25); border-radius: 4px; overflow: hidden;
+}
+.ru-bar > i { display: block; height: 100%; background: var(--clr-primary); border-radius: 4px; transition: width .3s; }
+
+/* ---------- 在派进度 ---------- */
+.ru-run-title { font-weight: 600; }
+.ru-run-time { font-variant-numeric: tabular-nums; }
+.ru-run-sub { font-size: 10.5px; opacity: 0.6; }
+
+/* ---------- 归来卡片 ---------- */
+.ru-ret-title { font-weight: 600; }
+.ru-ret-mode { font-size: 11px; color: #6fdc79; }
+.ru-ret-sum { margin-top: 5px; font-size: 11.5px; line-height: 1.6; opacity: 0.85; }
+.ru-ret-grid { margin-top: 6px; }
+.ru-ret-btns { display: flex; gap: 6px; margin-top: 8px; }
+.ru-died { color: #ff6b5f; }
+
+/* ---------- 归来日志（摘要 + 可展开） ---------- */
+.ru-log {
+  margin-top: 8px; padding: 6px 8px;
+  max-height: 240px; overflow-y: auto;
+  background: var(--surface-subtle); border-radius: 8px;
+}
+.ru-log-line { display: flex; gap: 6px; padding: 2px 0; font-size: 11px; line-height: 1.6; }
+.ru-log-t { flex-shrink: 0; opacity: 0.5; font-variant-numeric: tabular-nums; }
+.ru-log-x { flex: 1; min-width: 0; }
+.ru-log-death .ru-log-x, .ru-log-abandon .ru-log-x { color: #ff6b5f; }
+.ru-log-ward .ru-log-x { color: #ffc93c; }
+.ru-log-retreat .ru-log-x { color: #6fdc79; }
+
+/* ---------- 历史记录 ---------- */
+.ru-his {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 5px 8px; margin-bottom: 4px;
+  background: var(--surface-tile-solid); border-radius: 7px;
+  font-size: 11px;
+}
+.ru-his > span:last-child { opacity: 0.7; text-align: right; }
+
+/* ---------- 撤离条件列表 ---------- */
+.ru-rt-row {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 6px; margin-bottom: 5px;
+  background: var(--surface-tile-solid); border-radius: 8px;
+}
+.ru-rt-idx {
+  width: 16px; height: 16px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: rgba(130, 177, 255, 0.18);
+  color: #a3c2ff; font-size: 10px; font-weight: 600;
+}
+.ru-rt-btns { display: inline-flex; gap: 2px; flex-shrink: 0; }
+.ru-unit { font-size: 10px; opacity: 0.55; }
+
+/* ---------- 派遣按钮区 ---------- */
+.ru-foot { margin: 14px 0 4px; }
+.ru-foot-line {
+  display: flex; justify-content: space-between; gap: 8px;
+  font-size: 11px; opacity: 0.7; margin-bottom: 6px;
+}
+.ru-warn {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: #ffc93c; margin-bottom: 4px;
+}
+.ru-dispatch-btn { width: 100%; justify-content: center; padding: 10px; font-size: 15px; }
+
+/* ---------- 仓库物品行 ---------- */
+.ru-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px; margin-bottom: 4px;
+  background: var(--surface-tile-solid); border-radius: 8px;
+  font-size: 11.5px;
+}
+.ru-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ru-item-num { opacity: 0.75; font-variant-numeric: tabular-nums; }
+.ru-item-price { margin-left: auto; opacity: 0.6; font-size: 10.5px; white-space: nowrap; }
+
+/* ---------- 神器图鉴 ---------- */
+.ru-art {
+  padding: 8px 10px; margin-bottom: 6px;
+  border: 1px solid var(--divider); border-radius: 10px;
+  background: var(--surface-tile-solid); font-size: 11.5px;
+}
+.ru-art.locked { opacity: 0.55; }
+.ru-art-name { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+.ru-art-tags { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.ru-art-lv { font-size: 11px; font-variant-numeric: tabular-nums; }
+.ru-art-sub { font-size: 10.5px; opacity: 0.6; }
+.ru-art-eff { font-size: 10.5px; color: #a3c2ff; }
+.ru-art-desc { margin-top: 3px; font-size: 10.5px; line-height: 1.6; opacity: 0.7; }
+
+/* ---------- 弟子卡 ---------- */
+.ru-dcard { padding: 10px 12px; }
+.ru-dname { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
+.ru-dbtns { display: flex; gap: 6px; margin-top: 10px; }
+.ru-dbtns .gb-btn { flex: 1; justify-content: center; }
+.ru-cost { margin-top: 5px; font-size: 10.5px; opacity: 0.6; line-height: 1.6; }
+
+/* 天光主题：浅底上补足对比度 */
+.theme-light .ru-chip.on { background: rgba(25, 118, 210, 0.12); }
+.theme-light .ru-art-eff { color: #1565c0; }
+.theme-light .ru-rt-idx { color: #1565c0; background: rgba(25, 118, 210, 0.12); }
+.theme-light .ru-st-idle { color: #2e7d32; }
+.theme-light .ru-st-dispatched { color: #9a6c00; }
+.theme-light .ru-st-awaiting { color: #1565c0; }
+.theme-light .ru-st-needRevive { color: #c62828; }

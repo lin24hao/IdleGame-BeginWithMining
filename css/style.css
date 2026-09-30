@@ -1,0 +1,117 @@
+:root {
+  --bg: #0d0d0f;
+  --panel: #1a1a1f;
+  --border: #2d2d35;
+  --text: #e8e6e3;
+  --text-dim: #8b8b95;
+  --accent: #d4a855;
+  --q-common: #c8c8c8;
+  --q-good: #4ade80;
+  --q-rare: #60a5fa;
+  --q-epic: #c084fc;
+  --q-legend: #fbbf24;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: #050505;
+  color: var(--text);
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+#app {
+  width: 375px;
+  height: 667px;
+  background: var(--bg);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+.btn {
+  background: var(--accent);
+  color: #1a1a1f;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.btn:hover { opacity: 0.9; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.text-dim { color: var(--text-dim); }
+@keyframes spin { to { transform: rotate(360deg); } }
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.bag-item:active { cursor: grabbing; }
+
+/* 滚动区域通用 */
+.scroll-area { overflow-y: auto; flex: 1; padding: 8px; }
+
+/* 场内固定布局 */
+#ingame-top {
+  flex-shrink: 0;
+  padding: 6px 8px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+#ingame-stage {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+}
+#ingame-log {
+  flex-shrink: 0;
+  height: 140px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.log-entry { margin: 1px 0; }
+
+/* 贵重物品扫光特效（类似卡牌游戏的全息扫光） */
+@keyframes precious-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.precious-shimmer {
+  background-image: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 215, 0, 0.15) 45%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 215, 0, 0.15) 55%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: precious-shimmer 2.5s ease-in-out infinite;
+}
+/* 贵重物品边框脉冲 */
+@keyframes precious-glow {
+  0%, 100% { box-shadow: 0 0 4px 1px rgba(255, 215, 0, 0.3); }
+  50% { box-shadow: 0 0 8px 3px rgba(255, 215, 0, 0.6); }
+}
+.precious-glow {
+  animation: precious-glow 2s ease-in-out infinite;
+}

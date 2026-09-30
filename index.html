@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>修仙·从挖灵石开始</title>
+  <!-- 零依赖：无 CDN、无外部字体/图标，双击本文件即玩 -->
+  <!-- 通用框架样式 + 各玩法模块专属样式（灵脉） -->
+  <link rel="stylesheet" href="css/base.css?v=20260924d">
+  <link rel="stylesheet" href="css/modules/lm/lm.css">
+  <link rel="stylesheet" href="css/modules/vill/vill.css">
+  <link rel="stylesheet" href="css/modules/farm/fa.css">
+  <link rel="stylesheet" href="css/modules/horde/ho.css">
+  <link rel="stylesheet" href="css/modules/school/sc.css">
+  <link rel="stylesheet" href="css/modules/ruin/ru.css">
+  <style>/* fallback: 深色底，避免首屏白闪 */ html,body{background:#0f1017;}</style>
+</head>
+<body class="theme-dark">
+  <div id="app"></div>
+
+  <!-- 图标系统 -->
+  <script src="js/icon.js?v=20260924d"></script>
+
+  <!-- 跨模块注册地基：统一注册表 / 跨模块 key 索引 / gooboo 式统一 tick（必须最先加载） -->
+  <script src="js/gb_registry.js?v=20260930a"></script>
+
+  <!-- 全局 Feature 解锁注册表 + globalLevel 系统 -->
+  <script src="js/global_unlock.js?v=20260930a"></script>
+  <script src="js/meta.js?v=20260930a"></script>
+
+  <!-- 灵脉引擎（数值照抄 gooboo-mining，仅改写设定）：依赖顺序固定 -->
+  <script src="js/modules/lm/lm_text.js?v=20260924b"></script>
+  <script src="js/modules/lm/lm_core.js?v=20260924b"></script>
+  <script src="js/modules/lm/lm_data.js?v=20260924b"></script>
+  <script src="js/modules/lm/lm_store.js?v=20260924b"></script>
+
+  <!-- 应用壳 + 各模块视图 -->
+  <script src="js/app.js"></script>
+  <script src="js/views/lm_view.js?v=20260924b"></script>
+
+  <!-- 宗门引擎（数值照抄 gooboo-village，仅改写设定） -->
+  <script src="js/modules/vill/vi_text.js"></script>
+  <script src="js/modules/vill/vi_core.js"></script>
+  <script src="js/modules/vill/vi_data.js"></script>
+  <script src="js/modules/vill/vi_store.js"></script>
+  <script src="js/views/vi_view.js"></script>
+
+  <!-- 灵植引擎（数值照抄 gooboo-farm，仅改写设定） -->
+  <script src="js/modules/farm/fa_text.js"></script>
+  <script src="js/modules/farm/fa_core.js"></script>
+  <script src="js/modules/farm/fa_data.js"></script>
+  <script src="js/modules/farm/fa_store.js"></script>
+  <script src="js/views/fa_view.js"></script>
+
+  <!-- 降妖引擎（数值照抄 gooboo-horde，仅改写设定） -->
+  <script src="js/modules/horde/ho_core.js"></script>
+  <script src="js/modules/horde/ho_data.js"></script>
+  <script src="js/modules/horde/ho_mod.js"></script>
+  <script src="js/modules/horde/ho_store.js"></script>
+  <script src="js/modules/horde/ho_text.js"></script>
+  <script src="js/views/ho_view.js"></script>
+
+  <!-- 藏经阁引擎（数值照抄 gooboo-school，仅改写设定）：依赖顺序固定 -->
+  <script src="js/modules/school/sc_text.js"></script>
+  <script src="js/modules/school/sc_core.js"></script>
+  <script src="js/modules/school/sc_data.js"></script>
+  <script src="js/modules/school/sc_store.js"></script>
+  <script src="js/views/sc_view.js"></script>
+
+  <!-- 秘境引擎：派遣 → 等待归来（数据表 / 内核 / store / 模拟引擎 / 视图） -->
+  <script src="js/modules/ruin/ru_text.js"></script>
+  <script src="js/modules/ruin/ru_data.js"></script>
+  <script src="js/modules/ruin/ru_core.js"></script>
+  <script src="js/modules/ruin/ru_store.js"></script>
+  <script src="js/modules/ruin/ru_sim.js"></script>
+  <script src="js/views/ru_view.js"></script>
+
+  <!-- 阶段 2 新模块：大道法则 / 先天灵宝 / 仙器 / 仙尊指引 -->
+  <script src="js/modules/dao/dao_core.js"></script>
+  <script src="js/modules/relic/relic_core.js"></script>
+  <script src="js/modules/treasure/treasure_core.js"></script>
+  <script src="js/modules/general/general_core.js"></script>
+</body>
+</html>

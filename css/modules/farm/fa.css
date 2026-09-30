@@ -1,0 +1,128 @@
+/* ============================================================
+ * fa.css —— 灵植（farm）模块专属样式（复刻 gooboo farm 视觉）
+ * ============================================================ */
+.fa-page { padding: 8px; }
+
+/* ---------- 顶部操作栏（gooboo FieldBar：居中双行 + 右侧灵雨壶） ---------- */
+.fa-bar { display: flex; justify-content: center; align-items: center; gap: 10px; min-height: 76px; padding: 6px 8px; }
+.fa-bar-center { display: flex; flex-direction: column; align-items: center; }
+.fa-bar-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; margin: 2px 0; }
+.fa-btn {
+  min-width: 36px; height: 36px; border: none; border-radius: 8px; cursor: pointer;
+  background: var(--c-btn, #3949ab); color: #fff; display: inline-flex; align-items: center; justify-content: center; margin: 4px;
+}
+.fa-btn:hover { filter: brightness(1.1); }
+.fa-btn:disabled { opacity: 0.4; cursor: default; }
+.fa-btn.active { outline: 2px solid var(--c-accent, #ff5252); outline-offset: 1px; }
+.fa-btn.danger { background: var(--c-error, #e53935); }
+.fa-btn.mini { width: 26px; height: 26px; min-width: 26px; border-radius: 6px; margin: 0; }
+.fa-color-chip { width: 18px; height: 18px; border-radius: 4px; display: inline-block; }
+.fa-colors { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; width: 100%; padding: 4px; }
+.fa-colorbtn { width: 22px; height: 22px; border-radius: 4px; border: 2px solid transparent; cursor: pointer; margin-right: 4px; }
+.fa-colorbtn.sel { border-color: #fff; }
+/* 灵雨壶 */
+.fa-can { position: relative; width: 64px; height: 64px; margin: 0 8px; }
+.fa-can-ico { position: absolute; inset: 0; color: #90a4ae; }
+.fa-can-ico.dim { opacity: 0.5; }
+.fa-can-fill { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; color: #4fc3f7; transition: height 0.4s; }
+
+/* ---------- 灵田页：左右两栏（左田格 80% / 右作物列表 20%） ---------- */
+.fa-farm-grid { display: flex; gap: 12px; align-items: flex-start; margin: 6px auto; max-width: 1100px; padding: 0 8px; }
+.fa-field-wrap { flex: 0 0 80%; min-width: 0; display: flex; justify-content: center; padding: 8px; }
+.fa-crop-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow: auto; }
+.fa-crop-item {
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+  padding: 6px 8px; border: none; border-radius: 8px; cursor: pointer;
+  background: var(--c-chip, rgba(255,255,255,0.05)); color: #cfd8dc; font-size: 13px;
+}
+.fa-crop-item:hover { filter: brightness(1.1); }
+.fa-crop-item.sel { background: var(--c-accent, #1565c0); color: #fff; }
+.fa-crop-item .fa-crop-time { margin-left: auto; opacity: 0.75; }
+@media (max-width: 900px) { .fa-farm-grid { flex-direction: column; } .fa-field-wrap { flex: none; width: 100%; } }
+
+/* ---------- 灵田网格（gooboo Field：响应式尺寸） ---------- */
+.fa-field { margin: 0 auto; border-spacing: 12px; }
+.fa-tile {
+  position: relative; border-radius: 8px; text-align: center; vertical-align: middle;
+  width: 44px; height: 44px; cursor: default;
+}
+.fa-tile.filled { background: var(--tile-fill, rgba(255,255,255,0.10)); cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+.fa-cell-color { position: absolute; inset: 0; opacity: 0.25; pointer-events: none; border-radius: 8px; }
+/* gooboo Field.vue 响应式田格尺寸（xs:44/4、md~lg:80/8、xl:96/16） */
+@media (min-width: 1904px) { .fa-field { border-spacing: 16px; } .fa-tile { width: 96px; height: 96px; } }
+@media (min-width: 960px) and (max-width: 1903px) { .fa-field { border-spacing: 8px; } .fa-tile { width: 80px; height: 80px; } }
+@media (max-width: 959px) { .fa-field { border-spacing: 4px; } .fa-tile { width: 44px; height: 44px; border-radius: 4px; } }
+.fa-cell-crop { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+.fa-crop-head { font-size: 11px; line-height: 1; margin-top: 3px; min-height: 14px; }
+.fa-crop-mid { display: flex; align-items: center; justify-content: center; }
+.fa-crop-icon { line-height: 1; }
+.fa-giant { position: absolute; top: 2px; right: 2px; font-size: 10px; padding: 1px 3px; border-radius: 3px; background: var(--c-accent, #ff5252); color: #fff; }
+/* gooboo Crop.vue 底部 grow 进度条：占满格宽，桌面 高12/max 圆角12，移动 高4/圆角4 */
+.fa-progress { width: 100%; height: 12px; border-radius: 12px; background: rgba(0,0,0,0.3); overflow: hidden; }
+.fa-progress-fill { height: 100%; background: var(--c-progress, #8bc34a); transition: width 0.3s; }
+.fa-progress-fill.grown { background: #66bb6a; }
+.fa-hp { font-size: 10px; opacity: 0.7; }
+@media (max-width: 959px) { .fa-progress { height: 4px; border-radius: 4px; } }
+.fa-cell-building { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.fa-premium { position: absolute; top: 2px; right: 2px; font-size: 10px; padding: 1px 3px; border-radius: 3px; background: #ffd54f; color: #000; }
+
+/* ---------- 选择栏 ---------- */
+.fa-selector { padding: 8px; }
+.fa-selector-title { font-weight: 600; margin: 6px 2px 4px; opacity: 0.8; }
+.fa-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.fa-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: none; border-radius: 16px;
+  background: var(--c-chip, #3a4557); color: #cfd8dc; cursor: pointer; font-size: 13px;
+}
+.fa-chip.sel { background: var(--c-accent, #1565c0); color: #fff; }
+.fa-time { font-size: 11px; opacity: 0.7; }
+.fa-time.ft { color: var(--c-accent, #ff5252); }
+.fa-cnt { font-size: 11px; opacity: 0.7; margin-left: 2px; }
+
+/* ---------- 仓库页 ---------- */
+.fa-inv { padding: 12px; max-width: 640px; margin: 0 auto; }
+.fa-inv-sep { height: 1px; margin: 10px 2px; background: rgba(255,255,255,0.12); }
+.fa-inv-section { margin-bottom: 16px; }
+.fa-ress { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+.fa-res { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--c-chip, rgba(255,255,255,0.05)); }
+.fa-res-name { flex: 1; opacity: 0.85; }
+.fa-res-val { font-weight: 600; }
+.fa-crop-list, .fa-gene-list { display: flex; flex-direction: column; gap: 4px; }
+.fa-crop-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.05); }
+.fa-crop-ic { display: inline-flex; }
+.fa-crop-name { flex: 1; }
+.fa-crop-lvl, .fa-crop-genes { font-size: 12px; opacity: 0.75; }
+.fa-gene { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); }
+.fa-gene-pts { font-size: 12px; opacity: 0.7; }
+
+/* ---------- 仓库两列布局（gooboo md+） ---------- */
+.fa-inv-row { display: flex; align-items: flex-start; gap: 12px; }
+.fa-inv-left { flex: 1; min-width: 0; }
+.fa-inv-right { width: 320px; min-width: 300px; }
+
+/* ---------- 升级道法列表 ---------- */
+.fa-upg { display: flex; flex-direction: column; gap: 6px; }
+.fa-upg-title { font-weight: 600; font-size: 14px; opacity: 0.85; margin: 4px 2px; }
+.fa-upg-title.ft { color: var(--c-accent, #ffd54f); }
+.fa-upg-card {
+  padding: 8px 10px; border-radius: 8px; background: var(--c-card, rgba(255,255,255,0.06));
+  display: flex; flex-direction: column; gap: 5px;
+}
+.fa-upg-card.locked { opacity: 0.75; }
+.fa-upg-card.maxed { opacity: 0.55; }
+.fa-upg-head { display: flex; align-items: center; justify-content: space-between; }
+.fa-upg-name { font-weight: 600; }
+.fa-upg-lvl { font-size: 12px; opacity: 0.75; }
+.fa-upg-price { display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px; }
+.fa-price { padding: 1px 5px; border-radius: 4px; background: rgba(0,0,0,0.25); }
+.fa-price.ok { color: #a5d6a7; }
+.fa-price.no { color: #ef9a9a; }
+.fa-upg-buy { align-self: flex-start; }
+.fa-upg-status { font-size: 12px; opacity: 0.7; }
+.fa-upg-effs { font-size: 11px; opacity: 0.7; }
+.fa-upg-eff { line-height: 1.5; }
+
+@media (max-width: 900px) {
+  .fa-inv-row { flex-direction: column; }
+  .fa-inv-right { width: 100%; min-width: 0; }
+}
