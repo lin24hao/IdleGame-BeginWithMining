@@ -64,20 +64,24 @@
   35% { transform: translateY(4px) scale(0.97); }
   100% { transform: translateY(0) scale(1); }
 }
-/* 矿锄（固定左侧，瞬间挥动） */
+/* 矿锄：默认停在「举起」状态，点击时由 JS 加 swing-once 类触发一次挥动 */
 .lm-pickaxe {
-  position: absolute; left: -74px; top: 58%;
-  height: 86px; color: #c8b28a;
-  transform-origin: 78% 82%;
-  animation: lm-pick-swing 1.2s ease-in-out infinite;
+  position: absolute;
+  width: 86px; height: 86px; color: #c8b28a;
+  transform: translateY(-50%) rotate(-30deg);
   pointer-events: none; z-index: 2;
 }
-@keyframes lm-pick-swing {
-  0%, 12% { transform: translateY(-50%) rotate(-30deg); }
-  38%, 50% { transform: translateY(-50%) rotate(24deg); }
-  62%, 100% { transform: translateY(-50%) rotate(-30deg); }
-}
 .lm-pickaxe .lm-pick-handle { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+/* 单次挥动画：拉到 -30° → 砸到 +24° → 回 -30° */
+.lm-pickaxe.swing-once {
+  animation: lm-pick-swing 320ms cubic-bezier(.25,.46,.45,.94) forwards;
+}
+@keyframes lm-pick-swing {
+  0%   { transform: translateY(-50%) rotate(-30deg); }
+  40%  { transform: translateY(-50%) rotate(28deg); }
+  70%  { transform: translateY(-50%) rotate(8deg); }
+  100% { transform: translateY(-50%) rotate(-30deg); }
+}
 
 /* ---- 环形熔炉 ---- */
 .lm-forge-ring { position: absolute; inset: 0; pointer-events: none; }

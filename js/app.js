@@ -148,6 +148,11 @@ var GB_APP = {
       try { if (saved.mods && typeof GB_MODULES !== 'undefined') GB_MODULES.restoreAll(saved.mods); } catch (e) {}
     }
     UPG.applyAll();
+    // 读档完成后立刻 syncAll 一次：确保 globalLevel 是各模块 stat 的真实最大值
+    // （存档里可能是旧值，模块 init 后 stat 可能被重置或修正）
+    if (typeof GB_META !== 'undefined') {
+      try { GB_META.syncAll(); } catch (e) {}
+    }
   },
 
   /* ============ 生命周期 ============ */
@@ -162,8 +167,9 @@ var GB_APP = {
   /**
    * 真正启动游戏：初始化引擎 + 离线结算 + Tick 循环 + 存档钩子
    * 只有用户从主页点击"新游戏"或"继续游戏"后才会执行
+   * @param {string} initialFeature 启动后默认导航到哪个功能（新游戏='lm'，继续游戏='home'）
    */
-  _bootEngine() {
+  _bootEngine(initialFeature) {
     // 统一地基：把灵脉的载入挂到注册表，再统一载入全部模块
     if (typeof GB_MODULES !== 'undefined') {
       GB_MODULES.attachView('lm', { load: () => this.initEngine() });
@@ -172,6 +178,12 @@ var GB_APP = {
       try { GB_MODULES.afterLoad(); } catch (e) {}
     } else {
       this.initEngine();
+    }
+
+    // 立刻同步一次 globalLevel —— 否则首次 renderHome 时 globalLevel 还是 0
+    // （tickAll 里虽然每次 tick 都会调 syncAll，但首次 render 发生在第一个 tick 之前）
+    if (typeof GB_META !== 'undefined') {
+      try { GB_META.syncAll(); } catch (e) {}
     }
 
     // 离线结算（离开时长）——上限 8 小时
@@ -185,7 +197,7 @@ var GB_APP = {
 
     this.ready = true;
     this.renderShell();
-    this.navigate('home');
+    this.navigate(initialFeature || 'home');
 
     // 统一 Tick：按真实时间差驱动全部模块 + 存档 + 视图刷新
     this._lastTick = Date.now() / 1000;
@@ -358,13 +370,14 @@ var GB_APP = {
       // 清空所有存档后再启动（在 _bootEngine 之前 hardReset，因为引擎还没启动）
       this._hardResetSilent();
     }
-    this._bootEngine();
+    // gooboo 原版新游戏默认 screen='mining'（挖矿），新存档直接进灵脉
+    this._bootEngine(isNew ? 'lm' : 'home');
   },
 
   /** 确认新游戏（有存档时的二次确认） */
   _confirmNewGame() {
     const overlay = document.createElement('div');
-    overlay.className = 'overlay';
+    overlay.className = 'overlay confirm-new';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;';
     overlay.innerHTML = `
       <div class="modal" style="width:min(420px,92vw);">
@@ -375,11 +388,10 @@ var GB_APP = {
         </p>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
           <button class="gb-btn grey" onclick="document.querySelector('.overlay.confirm-new')?.remove()">返回</button>
-          <button class="gb-btn error" onclick="GB_APP._enterGame(true)">确认开启</button>
+          <button class="gb-btn error" onclick="document.querySelector('.overlay.confirm-new')?.remove();GB_APP._enterGame(true)">确认开启</button>
         </div>
       </div>
     `;
-    overlay.classList.add('confirm-new');
     document.body.appendChild(overlay);
   },
 
@@ -517,28 +529,52 @@ var GB_APP = {
 
   renderHome() {
     const curLevel = typeof GB_META !== 'undefined' ? GB_META.getLevel() : 0;
-    const groups = this.features.map(g => `
-      <div>
-        <div class="feature-title">${g.label}${curLevel > 0 ? `<span style="margin-left:auto;font-size:12px;color:var(--text-dim);font-weight:normal;">道行等级 ${curLevel}</span>` : ''}</div>
-        <div class="tile-nav" style="padding-top:8px;">
-          ${g.tiles.map(t => {
-            const unlocked = this._isFeatureUnlocked(t.id);
-            const reqLevel = this._featureGlobalLevelThreshold(t.id);
-            const canView = unlocked || (typeof GB_UNLOCK !== 'undefined' && GB_UNLOCK.isVisible(t.unlockKey));
-            const dim = !unlocked;
-            return `
-            <div class="feature-tile${unlocked ? '' : ' locked'}"
-                 style="${unlocked ? '' : 'cursor:not-allowed;opacity:0.55;'}"
-                 onclick="GB_APP.navigate('${t.id}')">
-              <div class="tile-icon ${t.color}" style="${unlocked ? '' : 'filter:grayscale(0.5);'}">${GB_ICON.icon(t.icon, 44)}</div>
-              <div class="tile-label">${t.name}</div>
-              <div class="tile-desc">${t.desc}</div>
-              ${unlocked ? '' : `<div class="tile-lock" title="道行等级 ${reqLevel} 解锁">${GB_ICON.icon('mdi-lock', 18)} <span style="font-size:10px;">Lv${reqLevel}</span></div>`}
-            </div>`;
-          }).join('')}
-        </div>
-      </div>`).join('');
-    return `<div class="scroll-container">${groups}</div>`;
+    // gooboo 风格：每组只显示「已解锁的 tile」+「1 个下一个待解锁的 NextTile」（锁图标+等级），其余全部隐藏
+    // 这样玩家一开始只有灵脉一个入口，随 globalLevel 增长逐步解锁，路径清晰
+    const renderGroup = (g) => {
+      const unlockedTiles = [];
+      let nextFeature = null; // { tile, threshold }
+      g.tiles.forEach(t => {
+        const unlocked = this._isFeatureUnlocked(t.id);
+        if (unlocked) { unlockedTiles.push(t); return; }
+        const reqLevel = this._featureGlobalLevelThreshold(t.id);
+        if (reqLevel > 0 && (!nextFeature || reqLevel < nextFeature.threshold)) {
+          nextFeature = { tile: t, threshold: reqLevel };
+        }
+      });
+      if (unlockedTiles.length === 0 && !nextFeature) return '';
+      return `
+        <div>
+          <div class="feature-title">${g.label}</div>
+          <div class="tile-nav" style="padding-top:8px;">
+            ${unlockedTiles.map(t => `
+              <div class="feature-tile" onclick="GB_APP.navigate('${t.id}')">
+                <div class="tile-icon ${t.color}">${GB_ICON.icon(t.icon, 44)}</div>
+                <div class="tile-label">${t.name}</div>
+                <div class="tile-desc">${t.desc}</div>
+              </div>`).join('')}
+            ${nextFeature ? `
+              <div class="feature-tile locked" style="cursor:not-allowed;opacity:0.65;"
+                   title="道行等级 ${nextFeature.threshold} 解锁 ${nextFeature.tile.name}">
+                <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+                  ${GB_ICON.icon('mdi-lock', 64)}
+                  <div style="position:absolute;bottom:8px;left:0;right:0;text-align:center;color:var(--text-sub);font-size:12px;">
+                    ${nextFeature.tile.name} · Lv${nextFeature.threshold}
+                  </div>
+                </div>
+              </div>` : ''}
+          </div>
+        </div>`;
+    };
+    const groupsHtml = this.features.map(renderGroup).filter(s => s).join('');
+    if (!groupsHtml) {
+      // 保险：没任何内容时（理论上不会发生，lm 永远解锁）保底显示灵脉
+      return `<div class="scroll-container">${renderGroup(this.features[0])}</div>`;
+    }
+    return `<div class="scroll-container">
+      ${curLevel > 0 ? `<div class="feature-title" style="margin-top:8px;">当前道行等级 ${curLevel}</div>` : ''}
+      ${groupsHtml}
+    </div>`;
   },
 
   /* ============ 主题 ============ */

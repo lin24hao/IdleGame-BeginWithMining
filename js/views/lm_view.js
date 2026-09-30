@@ -247,9 +247,9 @@ var GB_LM_VIEW = {
       ${this.unlocked('lmPickaxeCrafting') && this.subfeature === 0 ? `<button class="lm-sec-btn" data-act="dialog:craft" data-tip="灵锄铸造">${GB_ICON.icon('mdi-hammer',16)}铸造</button>` : ''}
       ${this.unlocked('lmSmeltery') && this.subfeature === 0 ? `<button class="lm-sec-btn" data-act="dialog:smelt" data-tip="炼化灵材为灵锭">${GB_ICON.icon('mdi-gold',16)}炼化</button>` : ''}
       ${this.unlocked('lmEnhancement') && this.subfeature === 0 ? `<button class="lm-sec-btn" data-act="dialog:enh" data-tip="附灵台">${GB_ICON.icon('mdi-package-up',16)}附灵</button>` : ''}
-      <button class="lm-rebirth-btn" data-act="dialog:prestige" data-tip="渡劫轮回：以当前道行换取飞升收益与轮回秘法。">
+      ${this.unlocked('lmDepthDweller') ? `<button class="lm-rebirth-btn" data-act="dialog:prestige" data-tip="渡劫轮回：以当前道行换取飞升收益与轮回秘法。">
         ${GB_ICON.icon('mdi-ghost',20)}轮回
-      </button>
+      </button>` : ''}
     </div>`;
 
     return `<div class="lm-wrap">${depthNav}<div class="lm-body">${left}${scene}${right}</div>${foot}</div>`;
@@ -425,8 +425,12 @@ var GB_LM_VIEW = {
     </div>`;
   },
 
-  /* 血条缓动：下一帧把已插入的 fill 宽度从旧值过渡到目标值 */
+  /* 血条缓动 + 矿锄对齐 + 自动挖矿特效检测
+   * tick 每秒改 durability/depth 后会调 render，这里检测变化量来触发对应的 hitfx/shatter。
+   * 区分：小变化（<200）= 在线自动挖矿，播特效；大变化 = 离线批量推进，静默不播。
+   */
   _easeHp() {
+    const self = this;
     const fill = document.getElementById('lm-ore-hp-fill');
     if (fill && this._pendingDurPct != null) {
       const target = this._pendingDurPct;
@@ -434,8 +438,256 @@ var GB_LM_VIEW = {
       requestAnimationFrame(() => {
         const f = document.getElementById('lm-ore-hp-fill');
         if (f) f.style.width = target + '%';
+        self._alignPickaxeToOre();
+        self._detectAutoHitFx();
       });
     }
+  },
+
+  /* 自动挖矿特效：检测 tick 引起的 durability/depth 变化，触发 UI 反馈 */
+  _detectAutoHitFx() {
+    const st = this.state;
+    const nowDur = Number(st.durability) || 0;
+    const nowDepth = Number(st.depth) || 0;
+
+    // 首次 render → 初始化追踪值，不播特效
+    if (this._trackDur == null) {
+      this._trackDur = nowDur;
+      this._trackDepth = nowDepth;
+      return;
+    }
+
+    // 正在手动处理破尽 → 跳过（doHit 里自己会调特效）
+    if (this._breaking) {
+      this._trackDur = nowDur;
+      this._trackDepth = nowDepth;
+      return;
+    }
+
+    const depthDelta = nowDepth - this._trackDepth;
+    const durDelta = this._trackDur - nowDur; // 正数 = 扣耐
+    const maxDur = this.G('currentDurability') || 1;
+    const prevWasLow = this._trackDur <= Math.max(10, maxDur * 0.05); // 上一帧耐久 ≤ 5% 或 ≤ 10
+
+    // --- 先判断是不是「破尽事件」 ---
+    // 三种破尽：
+    //   1. depth 变大（自动推进层数允许）
+    //   2. dur 归 0 但 depth 不变（卡层）
+    //   3. 上一帧极低耐久 + 本帧跳变大值（tick 破尽后自动回满，depth 没变）
+    const brokeAuto = depthDelta > 0;
+    const brokeStuck = (nowDur === 0 && durDelta > 0);
+    const brokeRefill = prevWasLow && durDelta < 0 && nowDur > this._trackDur * 1.5;
+    const broke = brokeAuto || brokeStuck || brokeRefill;
+    // isOnline：brokeRefill 里 dur 大跳变是 tick 回满行为，也算在线
+    const isOnline = brokeRefill
+      ? (Math.abs(depthDelta) <= 5)
+      : (Math.abs(durDelta) <= 200 && Math.abs(depthDelta) <= 5);
+
+    if (broke && isOnline) {
+      // 先补一下最后一击的 hitfx（致命一击也要有表现）
+      this._playHitFx();
+      const ore = document.getElementById('lm-ore');
+      if (ore) { ore.classList.remove('hit'); void ore.offsetWidth; ore.classList.add('hit'); }
+      // 再播 breakFx（碎片爆炸 + 旧矿淡出 + 矿锄收刀）
+      const playedBreak = (depthDelta === 1 || nowDur === 0 || brokeRefill);
+      if (playedBreak) {
+        this._playBreakFx();
+        const self = this;
+        // 等 breakFx 动画走完（~700ms），让 render 刷新出新矿，然后淡入
+        setTimeout(() => {
+          self.render();
+          self._playNewOreIn();
+        }, 720);
+      }
+      this._trackDepth = nowDepth;
+      this._trackDur = nowDur;
+      return;
+    }
+
+    // --- 普通自动挖矿：dur 扣了但没破 ---
+    if (durDelta > 0 && durDelta <= 200 && depthDelta === 0) {
+      this._playHitFx();
+      const ore = document.getElementById('lm-ore');
+      if (ore) { ore.classList.remove('hit'); void ore.offsetWidth; ore.classList.add('hit'); }
+    }
+
+    this._trackDepth = nowDepth;
+    this._trackDur = nowDur;
+  },
+
+  /* 破尽特效：旧矿石淡出 + Canvas 碎片爆炸 + 矿锄收刀 */
+  _playBreakFx() {
+    const ore = document.getElementById('lm-ore');
+    const pick = document.querySelector('.lm-pickaxe');
+    // 旧矿石淡出并缩小
+    if (ore) {
+      ore.style.transition = 'opacity 280ms ease, transform 280ms ease';
+      ore.style.opacity = '0';
+      ore.style.transform = 'scale(0.88)';
+    }
+    // 矿锄也收一下（跟矿石一起消失，新矿出来再出现）
+    if (pick) {
+      pick.style.transition = 'opacity 280ms ease';
+      pick.style.opacity = '0';
+    }
+    // Canvas 碎片爆炸
+    this._playShatter();
+  },
+
+  /* 新矿石淡入（破尽后推进层数完成时调用） */
+  _playNewOreIn() {
+    const self = this;
+    requestAnimationFrame(() => {
+      const newOre = document.getElementById('lm-ore');
+      const pick = document.querySelector('.lm-pickaxe');
+      if (newOre) {
+        newOre.style.opacity = '0';
+        newOre.style.transform = 'scale(1.08)';
+        requestAnimationFrame(() => {
+          newOre.style.transition = 'opacity 360ms ease, transform 360ms cubic-bezier(.18,1.35,.42,1)';
+          newOre.style.opacity = '';
+          newOre.style.transform = '';
+        });
+      }
+      if (pick) {
+        pick.style.opacity = '0';
+        requestAnimationFrame(() => {
+          pick.style.transition = 'opacity 260ms ease';
+          pick.style.opacity = '';
+          self._alignPickaxeToOre();
+        });
+      }
+      self._alignPickaxeToOre();
+    });
+  },
+
+  /* 矿锄对齐矿石：让矿锄摆在矿石左上侧、锤头对准矿石顶部 */
+  _alignPickaxeToOre() {
+    const rig = document.querySelector('.lm-mine-rig');
+    const ore = document.getElementById('lm-ore');
+    const pick = document.querySelector('.lm-pickaxe');
+    if (!rig || !ore || !pick) return;
+
+    const pickW = pick.offsetWidth;
+    const pickH = pick.offsetHeight;
+
+    // ore.offsetLeft/Top 是相对 rig 的（因为 ore 是 rig 的 flex 子元素）
+    const oreX = ore.offsetLeft;
+    const oreY = ore.offsetTop;
+    const oreW = ore.offsetWidth;
+    const oreH = ore.offsetHeight;
+
+    // 矿锄目标：矿锄中心落在矿石左侧约 25% 位置，矿锄顶部比矿石顶部高一点
+    const targetCx = oreX + oreW * 0.15;     // 矿锄中心 x：矿石左内 15% 处
+    const targetCy = oreY - pickH * 0.25 + pickH; // 矿锄中心 y：往下移一个矿锄身位
+
+    const left = targetCx - pickW / 2;
+    const top = targetCy - pickH / 2;
+
+    pick.style.left = left + 'px';
+    pick.style.top = top + 'px';
+
+    // 旋转中心：矿锄内部偏右下（柄尾位置），旋转时锤头（左上）砸向矿石
+    pick.style.transformOrigin = `${pickW * 0.58}px ${pickH * 0.82}px`;
+  },
+
+  /* 每次点击挖矿的即时特效：矿锄单次挥 + 火花粒子 + 伤害数字飘出 */
+  _playHitFx() {
+    const ore = document.getElementById('lm-ore');
+    if (!ore) return;
+    const oreR = ore.getBoundingClientRect();
+    const cx = oreR.left + oreR.width * 0.28; // 砸在矿石左侧
+    const cy = oreR.top + oreR.height * 0.22;
+
+    // 1. 矿锄单次挥（CSS 类控制，覆盖 infinite 的循环）
+    const pick = document.querySelector('.lm-pickaxe');
+    if (pick) {
+      pick.classList.remove('swing-once');
+      void pick.offsetWidth;
+      pick.classList.add('swing-once');
+    }
+
+    // 2. Canvas 火花 + 伤害数字
+    this._killHitFx();
+    const cv = document.createElement('canvas');
+    cv.id = 'lm-hitfx-canvas';
+    cv.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:999998;';
+    document.body.appendChild(cv);
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.ceil(window.innerWidth * dpr);
+    cv.height = Math.ceil(window.innerHeight * dpr);
+    cv.style.width = window.innerWidth + 'px';
+    cv.style.height = window.innerHeight + 'px';
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    // 火花粒子（小而快，橙红色）
+    const sparks = [];
+    for (let i = 0; i < 14; i++) {
+      const ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.4; // 主要向上
+      const sp = 0.3 + Math.random() * 0.5;
+      sparks.push({
+        x: 0, y: 0, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+        life: 0, r: 1 + Math.random() * 2,
+        hue: 18 + Math.random() * 22, // 橙红到黄
+      });
+    }
+
+    // 伤害数字（飘字 + 淡出）
+    const dmg = Math.floor(this.G('currentDamage') || 0);
+    const dmgText = dmg > 0 ? '-' + dmg : 'miss';
+    const dmgColor = dmg > 0 ? '#FFC107' : '#999';
+    const dmgLife = 0;
+    const dmgMax = 700;
+
+    const self = this;
+    let lastT = performance.now();
+    const step = (now) => {
+      const dt = Math.min(40, now - lastT); lastT = now;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+
+      let alive = false;
+      for (const s of sparks) {
+        s.life += dt;
+        if (s.life > 450) continue;
+        alive = true;
+        s.vy += 0.0008 * dt; // 轻重力
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        const alpha = Math.max(0, 1 - s.life / 450);
+        ctx.beginPath();
+        ctx.fillStyle = `hsla(${s.hue}, 95%, 65%, ${alpha})`;
+        ctx.arc(cx + s.x, cy + s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 伤害数字飘字
+      const dLife = (now - self._hitFxStart || 0);
+      if (dLife < dmgMax) {
+        alive = true;
+        const alpha = Math.max(0, 1 - dLife / dmgMax);
+        const yOff = -dLife * 0.05; // 向上飘
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = dmgColor;
+        ctx.font = 'bold 16px "Microsoft YaHei", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+        ctx.lineWidth = 3;
+        ctx.strokeText(dmgText, cx, cy + yOff);
+        ctx.fillText(dmgText, cx, cy + yOff);
+        ctx.restore();
+      }
+
+      if (alive) { requestAnimationFrame(step); }
+      else { cv.remove(); self._hitFxCanvas = null; }
+    };
+    self._hitFxStart = performance.now();
+    requestAnimationFrame(step);
+  },
+  _killHitFx() {
+    const cv = document.getElementById('lm-hitfx-canvas');
+    if (cv) cv.remove();
   },
 
   /* =========================================================
@@ -507,8 +759,10 @@ var GB_LM_VIEW = {
     pts.push({ x: 0, y: 0 }); // 中心
 
     // --- 组装碎片：每个中心+相邻两环点形成三角 ---
+    // 只生成前 rings-1 环（最外环节点 next 会越界）
     const shards = [];
-    for (let ring = 0; ring < rings; ring++) {
+    const totalRingNodes = rings * slicesPerRing;
+    for (let ring = 0; ring < rings - 1; ring++) {
       const base = ring * slicesPerRing;
       const next = (ring + 1) * slicesPerRing;
       for (let i = 0; i < slicesPerRing; i++) {
@@ -517,7 +771,8 @@ var GB_LM_VIEW = {
         const a2 = pts[base + i2];
         const b1 = pts[next + i];
         const b2 = pts[next + i2];
-        const tri = [a1, a2, b1, b2, pts[pts.length - 1]];
+        const center = pts[totalRingNodes]; // 最后一个 push 的中心点
+        const tri = [a1, a2, b1, b2, center];
         // 从 5 点中选 3 个构成一个偏角三角形
         const p1 = tri[Math.floor(Math.random() * tri.length)];
         let p2 = tri[Math.floor(Math.random() * tri.length)]; while (p2 === p1) p2 = tri[Math.floor(Math.random() * tri.length)];
@@ -675,10 +930,13 @@ var GB_LM_VIEW = {
     return { h: hh, s: Math.round(ss * 100), l: Math.round(l * 100) };
   },
 
-  /* 点击挖矿：矿锄下压动画 + 真实消耗耐久；破尽时先击碎清空，再推进并回满 */
+  /* 挖矿（点击触发，自动挖矿走同一条数值链路，特效由 tick 变化检测触发） */
   doHit() {
     const ore = document.getElementById('lm-ore');
     if (ore) { ore.classList.remove('hit'); void ore.offsetWidth; ore.classList.add('hit'); }
+    // UI 特效：矿锄单次挥 + 火花 + 伤害飘字
+    this._playHitFx();
+
     const st = this.state;
     const dmg = this.G('currentDamage') || 0;
     const self = this;
@@ -686,28 +944,33 @@ var GB_LM_VIEW = {
     const nd = Math.max(0, (Number(st.durability) || 0) - dmg);
 
     if (nd > 0) {
-      // 普通一击：直接扣耐，渲染后 rAF 缓动到新值
+      // 普通一击：直接扣耐，同步追踪值避免 _detectAutoHitFx 重复触发
       st.durability = nd;
+      this._trackDur = nd;
       GB_APP.persist();
       clearTimeout(self._hitTimer);
       self._hitTimer = setTimeout(() => self.render(), 260);
       return;
     }
 
-    // ---- 破尽：播放 Canvas 碎裂 → 清空血条（缓动） → 推进层数并回满 ----
-    this._playShatter();
+    // ---- 破尽 ----
+    this._playBreakFx();
     st.durability = 0;
     this._breaking = true;
     GB_APP.persist();
     clearTimeout(self._hitTimer);
-    // 等碎裂动画展示大半后再推进层数、让矿重新出现
+    // 等碎裂动画展示大半后再推进层数、让新矿重新出现
     self._hitTimer = setTimeout(() => {
       const maxDepth = Math.max(1, Number(STAT.get('lm_maxDepth' + self.subfeature)) || 1);
       if (st.depth < maxDepth) st.depth++;
       st.durability = self.G('currentDurability') || 0;
-      self._breaking = false;
+      this._breaking = false;
+      // 同步追踪值，避免自动挖矿检测把新矿当成 tick 变化再播一次 breakFx
+      self._trackDepth = st.depth;
+      self._trackDur = st.durability;
       GB_APP.persist();
-      self.render(); // 这次 render 从 0 缓动回满
+      self.render();
+      self._playNewOreIn();
     }, 720);
     this.render(); // 立即 render：血条从旧值缓动到 0
   },
