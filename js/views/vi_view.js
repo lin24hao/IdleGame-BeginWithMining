@@ -226,7 +226,7 @@ var GB_VI_VIEW = {
     const c1 = `<div class="scroll-container-tab">${this.renderResources()}</div>`;
     const c2 = `<div class="scroll-container-tab">${this.renderJobList()}</div>`;
     const c3 = `<div class="scroll-container-tab">${this.renderQueue()}${this.renderBuildings()}</div>`;
-    const c4 = `<div class="scroll-container-tab">${this.renderUpgrades('regular', 'premium')}</div>`;
+    const c4 = `<div class="scroll-container-tab">${this.renderUpgrades()}</div>`;
     return `<div class="content-row">${this.col(c1, 'col-3')}${this.col(c2, 'col-3')}${this.col(c3, 'col-3')}${this.col(c4, 'col-3')}</div>`;
   },
   col(inner, cls) { return `<div class="${cls || 'col-4'}">${inner}</div>`; },
@@ -393,9 +393,21 @@ var GB_VI_VIEW = {
   renderQueue() {
     const q = this.state.buildingQueue || [];
     if (!q.length) return '';
-    const items = q.map(id => {
+    const prog = this.state._qProgress || {};
+    const items = q.map((id, i) => {
       const key = id.replace(/^village_/, '');
-      return `<span class="vi-queue-item">${this.icon('mdi-hammer', 15)}${this.buildName(key)}</span>`;
+      const d = VI_UPG.defs[id];
+      const lvl = VI_UPG.levels[id] || 0;
+      const total = (typeof d.timeNeeded === 'function' ? d.timeNeeded(lvl) : (d.timeNeeded || 0));
+      const remain = prog[id] !== undefined ? prog[id] : total;
+      const pct = total > 0 ? Math.max(0, Math.min(100, (1 - remain / total) * 100)) : 0;
+      const isHead = i === 0;
+      const headTag = isHead ? `<span class="gb-chip small" style="background:rgba(126,87,194,.3);color:#c7a7ea;">建造中</span>` : `<span class="dim" style="font-size:11px;">排队</span>`;
+      const timeTag = `<span class="dim" style="font-size:11px;">${this.fmtTime(isHead ? remain : total)}</span>`;
+      const bar = isHead
+        ? `<div class="vi-bar"><div class="vi-bar-fill" style="width:${pct}%"></div><span>${Math.round(pct)}% · ${this.fmtTime(remain)}</span></div>`
+        : '';
+      return `<div class="vi-queue-item">${this.icon('mdi-hammer', 15)}${this.buildName(key)}${headTag}${timeTag}${bar}</div>`;
     }).join('');
     return `<div class="feature-title">建造队列</div><div class="vi-card" style="padding:10px;"><div class="vi-queue">${items}</div></div>`;
   },
@@ -418,7 +430,10 @@ var GB_VI_VIEW = {
       const d = VI_UPG.defs[id];
       const lvl = VI_UPG.levels[id] || 0;
       const cap = VI_UPG.cap(id);
-      const can = lvl < cap && !q.includes(id);
+      const maxed = lvl >= cap;
+      const queued = q.includes(id);
+      const afford = VI_UPG.canAfford(id);
+      const can = !maxed && !queued && afford;
       const priceTxt = this.priceTxt(id);
       const pricePlain = this.pricePlain(id);
       const capTxt = isFinite(cap) ? `${this.fmt(lvl)} / ${this.fmt(cap)}` : this.fmt(lvl);
@@ -452,12 +467,24 @@ var GB_VI_VIEW = {
     return map[n] || String(n).replace(/^currencyVillage/i, '').replace(/Gain$/, '');
   },
 
-  /* ---------- 道法升级（可选按 type 过滤：regular/premium → 宗门列；prestige → 飞升 tab） ---------- */
+  /* ---------- 道法升级（默认 regular；prestige 飞升 tab；premium 归 gem 模块 ---------- */
   renderUpgrades(...types) {
+    // 默认 regular；强制排除 premium（premium 是 gem 模块管的，village 视图不渲染）
+    const eff = types.length ? types.filter(t => t !== 'premium') : ['regular'];
+
+    // gooboo regular 升级的解锁：villageCoinUpgrades（需至少建造 1 个 regular 解锁建筑）
+    if (eff.includes('regular') && !VI_UNLOCK.isUnlocked('villageCoinUpgrades')) {
+      return `<div class="feature-title">道法升级</div>
+        <div style="padding:24px 10px;text-align:center;color:var(--dim, #888);font-size:12px;">
+          未发现升级
+        </div>`;
+    }
+
     const ids = Object.keys(VI_UPG.defs).filter(id => {
       const d = VI_UPG.defs[id];
       if (d.type === 'building') return false;
-      if (types.length && types.indexOf(d.type) < 0) return false;
+      if (d.type === 'premium') return false;
+      if (eff.indexOf(d.type) < 0) return false;
       try {
         if (!VI_UPG.isVisible(id)) return false;
         if (VI_UPG.isMaxed(id)) return false;

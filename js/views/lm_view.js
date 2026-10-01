@@ -158,8 +158,26 @@ var GB_LM_VIEW = {
       const act = e.target.closest('[data-act]');
       if (act) this.handleAction(act.getAttribute('data-act'));
     });
+    // 启动自动挖矿动画循环（每秒一次，和 tick 同步；独立驱动，不依赖 store 变化）
+    if (this._autoMineTimer) clearInterval(this._autoMineTimer);
+    this._autoMineTimer = setInterval(() => { this._playAutoMineHit(); }, 1000);
   },
-  unload() { this.el = null; },
+  unload() {
+    if (this._autoMineTimer) { clearInterval(this._autoMineTimer); this._autoMineTimer = null; }
+    this._killHitFx();
+    this.el = null;
+  },
+
+  /* 自动挖矿单次命中动画：矿锄挥一次 + 火花 + 飘字（独立驱动，1s 一次） */
+  _playAutoMineHit() {
+    if (this._breaking) return;
+    const dmg = this.G('currentDamage');
+    if (!dmg || dmg <= 0) return;
+    if (this.tab !== 'mine') return;
+    this._playHitFx();
+    const ore = document.getElementById('lm-ore');
+    if (ore) { ore.classList.remove('hit'); void ore.offsetWidth; ore.classList.add('hit'); }
+  },
   setTab(t) {
     this.tab = t;
     const root = this.el;
@@ -390,6 +408,9 @@ var GB_LM_VIEW = {
     const def = CUR.defs['lm_' + oreKey];
     const col = def ? ('c-' + def.color) : 'c-grey';
 
+    // 保护罩：没被击碎过的矿（currentBreaks === 0）有蓝色灵气光环
+    const shielded = (G('currentBreaks') || 0) === 0;
+
     // 当前层属性行（韧性 / 灵气每小时收益 / 灵锄锋锐 / 破岩伤害 / 破层预估）
     const tough = G('currentToughness') || 0;
     const scrap = G('currentScrap') || 0;
@@ -416,7 +437,7 @@ var GB_LM_VIEW = {
             <div class="bar" id="lm-ore-hp-fill" style="width:${shown}%;"></div>
             <div class="bar-label balloon-d css-shadow-2" id="lm-ore-hp-label">${this.fmt(Math.max(0,dur))} / ${this.fmt(maxDur)}</div>
           </div>
-          <div class="lm-ore ${col}" id="lm-ore" onclick="GB_LM_VIEW.doHit()" data-tip="${this.curName('lm_'+oreKey)}：点击矿脉，算作一次挖掘。">
+          <div class="lm-ore ${col}${shielded ? ' shielded' : ''}" id="lm-ore" onclick="GB_LM_VIEW.doHit()" data-tip="${this.curName('lm_'+oreKey)}：点击矿脉，算作一次挖掘。">
             ${this.oreSvg(oreKey, 150)}
             <span class="lm-ore-name" style="display:block;text-align:center;margin-top:2px;">${this.curName('lm_'+oreKey)} · ${st.depth}层</span>
           </div>
@@ -454,6 +475,7 @@ var GB_LM_VIEW = {
     if (this._trackDur == null) {
       this._trackDur = nowDur;
       this._trackDepth = nowDepth;
+      this._trackBreaks = this.G('currentBreaks') || 0;
       return;
     }
 
@@ -461,58 +483,72 @@ var GB_LM_VIEW = {
     if (this._breaking) {
       this._trackDur = nowDur;
       this._trackDepth = nowDepth;
+      this._trackBreaks = this.G('currentBreaks') || 0;
       return;
     }
 
     const depthDelta = nowDepth - this._trackDepth;
     const durDelta = this._trackDur - nowDur; // 正数 = 扣耐
     const maxDur = this.G('currentDurability') || 1;
-    const prevWasLow = this._trackDur <= Math.max(10, maxDur * 0.05); // 上一帧耐久 ≤ 5% 或 ≤ 10
+    const breaks = this.G('currentBreaks') || 0;
+    const breaksDelta = breaks - (this._trackBreaks || 0);
 
     // --- 先判断是不是「破尽事件」 ---
-    // 三种破尽：
-    //   1. depth 变大（自动推进层数允许）
-    //   2. dur 归 0 但 depth 不变（卡层）
-    //   3. 上一帧极低耐久 + 本帧跳变大值（tick 破尽后自动回满，depth 没变）
-    const brokeAuto = depthDelta > 0;
-    const brokeStuck = (nowDur === 0 && durDelta > 0);
-    const brokeRefill = prevWasLow && durDelta < 0 && nowDur > this._trackDur * 1.5;
-    const broke = brokeAuto || brokeStuck || brokeRefill;
-    // isOnline：brokeRefill 里 dur 大跳变是 tick 回满行为，也算在线
-    const isOnline = brokeRefill
+    // 关键洞察：tick 只会让 dur 减少，三种异常跳变 = 破尽
+    //   A. nowDur > trackDur（dur 增加了 = tick 重置回满）
+    //   B. nowDur === 0 且之前有 dur（卡层破尽）
+    //   C. depth 变大了（推进的前提是破尽旧层）
+    const brokeRefill = durDelta < 0;           // dur 增加了（tick 重置）
+    const brokeStuck = nowDur === 0 && durDelta > 0;
+    const brokeAdvance = depthDelta > 0;        // depth 推进
+    const broke = brokeRefill || brokeStuck || brokeAdvance || breaksDelta > 0;
+
+    // isOnline：broke 场景可能有大 dur 跳变（tick 瞬间破尽），只看 depth 是否合理
+    const isOnline = broke
       ? (Math.abs(depthDelta) <= 5)
       : (Math.abs(durDelta) <= 200 && Math.abs(depthDelta) <= 5);
 
     if (broke && isOnline) {
-      // 先补一下最后一击的 hitfx（致命一击也要有表现）
+      // --- 所有破尽先播一下「最后一击的 hitfx」（矿锄挥一次 + 火花 + 飘字） ---
       this._playHitFx();
       const ore = document.getElementById('lm-ore');
       if (ore) { ore.classList.remove('hit'); void ore.offsetWidth; ore.classList.add('hit'); }
-      // 再播 breakFx（碎片爆炸 + 旧矿淡出 + 矿锄收刀）
-      const playedBreak = (depthDelta === 1 || nowDur === 0 || brokeRefill);
-      if (playedBreak) {
+
+      // --- 血条：破尽瞬间手动让它降到 0%（tick 可能跳过中间 0 的瞬间） ---
+      const fill = document.getElementById('lm-ore-hp-fill');
+      if (fill) { fill.style.width = '0%'; this._prevDurPct = 0; }
+
+      // --- breakFx（碎片爆炸）只在「同层破尽」时播 ---
+      // depth 推进 = 往下挖了一层，不该播"旧矿碎了"的爆炸动画
+      const sameLevelBreak = depthDelta === 0;
+      if (sameLevelBreak) {
         this._playBreakFx();
         const self = this;
-        // 等 breakFx 动画走完（~700ms），让 render 刷新出新矿，然后淡入
         setTimeout(() => {
           self.render();
           self._playNewOreIn();
         }, 720);
+      } else {
+        // depth 推进：淡入新矿（不破不立，直接切）
+        const self = this;
+        setTimeout(() => {
+          self.render();
+          self._playNewOreIn();
+        }, 300);
       }
+
       this._trackDepth = nowDepth;
       this._trackDur = nowDur;
+      this._trackBreaks = breaks;
       return;
     }
 
-    // --- 普通自动挖矿：dur 扣了但没破 ---
-    if (durDelta > 0 && durDelta <= 200 && depthDelta === 0) {
-      this._playHitFx();
-      const ore = document.getElementById('lm-ore');
-      if (ore) { ore.classList.remove('hit'); void ore.offsetWidth; ore.classList.add('hit'); }
-    }
+    // --- 普通自动挖矿：dur 扣了但没破（hitfx 由独立循环驱动，这里只更新追踪值） ---
+    // 不再在这里调 hitfx——_playAutoMineHit 每秒独立驱动，和 tick 同步
 
     this._trackDepth = nowDepth;
     this._trackDur = nowDur;
+    this._trackBreaks = breaks;
   },
 
   /* 破尽特效：旧矿石淡出 + Canvas 碎片爆炸 + 矿锄收刀 */
@@ -1090,7 +1126,7 @@ var GB_LM_VIEW = {
       ids = Object.keys(UPG.defs).filter(id => {
         const t = UPG.defs[id].type || 'regular';
         if (isPrestige) return t === 'prestige';
-        return t !== 'prestige';
+        return t === 'regular';
       }).filter(id => { try { return UPG.isVisible(id) && !UPG.isMaxed(id); } catch (e) { return false; } });
     } catch (e) {}
     ids.sort((a, b) => {
@@ -1110,7 +1146,7 @@ var GB_LM_VIEW = {
     try {
       ids = Object.keys(UPG.defs).filter(id => {
         const t = UPG.defs[id].type || 'regular';
-        return isPrestige ? t === 'prestige' : t !== 'prestige';
+        return isPrestige ? t === 'prestige' : t === 'regular';
       }).filter(id => { try { return UPG.isVisible(id) && !UPG.isMaxed(id); } catch (e) { return false; } });
     } catch (e) {}
     ids.sort((a, b) => {
@@ -1163,7 +1199,8 @@ var GB_LM_VIEW = {
       ids = Object.keys(UPG.defs).filter(id => {
         const t = UPG.defs[id].type || 'regular';
         if (isPrestige) return t === 'prestige';
-        return t !== 'prestige';
+        // 非 prestige 列只显示 regular（premium 归 gem 模块消费，不在各 feature 主视图渲染）
+        return t === 'regular';
       }).filter(id => {
         try { return UPG.isVisible(id) && !UPG.isMaxed(id); } catch (e) { return false; }
       });
@@ -1183,7 +1220,7 @@ var GB_LM_VIEW = {
     const allSameTypeIds = Object.keys(UPG.defs).filter(id => {
       const t = UPG.defs[id].type || 'regular';
       if (isPrestige) return t === 'prestige';
-      return t !== 'prestige';
+      return t === 'regular';
     });
     const reqChips = reqStats.map(statName => {
       const curVal = (LM_RT.lmState.stat[statName] && LM_RT.lmState.stat[statName].total) || 0;

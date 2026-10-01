@@ -50,6 +50,39 @@
 /* 矿上方层岩余量血条 */
 .lm-ore-hp { width: 240px; margin-bottom: 10px; }
 .lm-ore-hp .bar { background: linear-gradient(90deg, #F4511E, #FF6B5F); }
+/* 保护罩：没被击碎过的矿，矿石自带柔和蓝色灵气光晕 + 外围光环 */
+.lm-ore.shielded {
+  filter: drop-shadow(0 10px 14px rgba(0,0,0,0.4))
+          drop-shadow(0 0 8px rgba(100,180,255,0.6))
+          drop-shadow(0 0 22px rgba(80,150,255,0.35));
+}
+.lm-ore.shielded::before {
+  content: '';
+  position: absolute; inset: -14px -18px -14px -18px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(130, 200, 255, 0.45);
+  background: radial-gradient(circle, rgba(100,180,255,0.08) 0%, rgba(100,180,255,0) 70%);
+  animation: lm-shield-ring 4.2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+.lm-ore.shielded::after {
+  content: '';
+  position: absolute; inset: -20px -24px -20px -24px;
+  border-radius: 50%;
+  border: 1px dashed rgba(140, 210, 255, 0.25);
+  animation: lm-shield-spin 18s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+@keyframes lm-shield-ring {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50%      { opacity: 0.85; transform: scale(1.08); }
+}
+@keyframes lm-shield-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 /* 灵矿本体：可点击 */
 .lm-ore {
   position: relative; cursor: pointer;

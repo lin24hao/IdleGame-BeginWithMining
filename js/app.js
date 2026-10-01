@@ -620,10 +620,13 @@ var GB_APP = {
     this.openSettings();
   },
 
+  /** 当前版本号（与 patchnotes.js 最新版本一致） */
+  VERSION: '0.3.1',
+
   openAbout() {
     const html = `
       <div class="overlay" id="about-overlay" onclick="if(event.target===this)this.remove()">
-        <div class="modal">
+        <div class="modal" style="width:min(480px,92vw);">
           <button class="close-x" onclick="document.getElementById('about-overlay').remove()">${GB_ICON.icon('mdi-close', 22)}</button>
           <h2>关于</h2>
           <div style="font-size:13px;line-height:1.7;color:var(--text-main);">
@@ -631,6 +634,141 @@ var GB_APP = {
             <p>忠实复刻 gooboo 的挖矿放置玩法与美术风格，数值沿用 gooboo 原作设定，
                仅将设定改写为修仙主题，并全部改为中文界面。</p>
             <p>· M 键 = 返回首页<br>· 全程本地存档 <span class="mono" style="opacity:.6;">localStorage</span></p>
+            <p style="margin-top:12px;color:var(--text-dim);font-size:12px;">当前版本 v${this.VERSION}</p>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+            <button class="gb-btn" onclick="document.getElementById('about-overlay').remove()">关闭</button>
+            <button class="gb-btn primary" onclick="document.getElementById('about-overlay').remove();GB_APP.openPatchnotes()">
+              ${GB_ICON.icon('mdi-file-document-multiple', 18)} 版本更新日志
+            </button>
+          </div>
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+  },
+
+  /** 版本更新日志弹窗 */
+  openPatchnotes() {
+    const notes = (typeof GB_PATCHNOTES !== 'undefined') ? GB_PATCHNOTES : [];
+
+    // feature id → 玩法中文名（对应 app.js features[id]）
+    const FEATURE_NAMES = {
+      meta: '全局',
+      lm: '灵脉', village: '宗门', farm: '灵植园', horde: '降妖', ruin: '秘境',
+      school: '藏经阁', dao: '大道法则', lingbao: '先天灵宝', xianqi: '仙器', general: '仙尊指引',
+    };
+    // feature id → GB_UNLOCK.isUnlocked() 的 key（与 app.js features[].unlockKey 一致）
+    const FEATURE_UNLOCK_KEY = {
+      lm: 'lmFeature', village: 'villFeature', farm: 'faFeature', horde: 'hoFeature',
+      ruin: 'ruFeature', school: 'scFeature', dao: 'daoFeature', lingbao: 'lingbaoFeature',
+      xianqi: 'xianqiFeature', general: 'generalFeature',
+    };
+
+    /** 判断某玩法是否已解锁；meta 永远可见 */
+    const isFeatureUnlocked = (fid) => {
+      if (fid === 'meta') return true;
+      const key = FEATURE_UNLOCK_KEY[fid];
+      if (!key) return true;        // 未知 feature 默认显示
+      if (typeof GB_UNLOCK === 'undefined') return true;
+      return GB_UNLOCK.isUnlocked(key);
+    };
+
+    // 分组类型 → 颜色标签
+    const typeStyle = {
+      added:   { label: '新增', color: 'var(--q-good)' },
+      changed: { label: '改动', color: 'var(--accent)' },
+      fixed:   { label: '修复', color: 'var(--q-info)' },
+      balance: { label: '调整', color: 'var(--clr-warning)' },
+      removed: { label: '移除', color: 'var(--q-bad)' },
+    };
+
+    const versionsHtml = notes.map(v => {
+      let hiddenCount = 0;   // 因未解锁玩法而隐藏的条目数
+
+      const visibleGroups = v.groups.filter(g => {
+        const unlocked = isFeatureUnlocked(g.feature);
+        if (!unlocked) {
+          // 统计被隐藏的条目数
+          g.sections.forEach(sec => { hiddenCount += sec.items.length; });
+        }
+        return unlocked;
+      });
+
+      const groupsHtml = visibleGroups.map(g => {
+        const featName = FEATURE_NAMES[g.feature] || g.feature;
+        // 取玩法的图标（meta 用地球图标兜底）
+        const featTile = this._findTile(g.feature);
+        const featIcon = featTile ? featTile.icon : 'mdi-earth';
+
+        const sectionsHtml = g.sections.map(sec => {
+          const ts = typeStyle[sec.type] || { label: sec.type, color: 'var(--text-dim)' };
+          const itemsHtml = sec.items.map(item =>
+            `<li style="margin:3px 0;padding-left:4px;">${item}</li>`
+          ).join('');
+          return `
+            <div style="margin:8px 0 10px 0;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <span style="display:inline-block;font-size:10px;font-weight:bold;padding:1px 6px;border-radius:3px;background:${ts.color}22;color:${ts.color};border:1px solid ${ts.color}55;">${ts.label}</span>
+              </div>
+              <ul style="margin:0;padding-left:18px;font-size:12.5px;line-height:1.7;color:var(--text-main);">${itemsHtml}</ul>
+            </div>`;
+        }).join('');
+
+        return `
+          <div style="margin-top:8px;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:bold;color:var(--text-main);margin-bottom:4px;">
+              ${GB_ICON.icon(featIcon, 18)}
+              <span>${featName}</span>
+            </div>
+            ${sectionsHtml}
+          </div>`;
+      }).join('');
+
+      // 无任何可见组且无隐藏项时（理论上不会有），整版隐藏
+      if (visibleGroups.length === 0 && hiddenCount === 0) return '';
+
+      // 只有被隐藏的内容时，整版折叠显示一行
+      if (visibleGroups.length === 0 && hiddenCount > 0) {
+        return `
+          <div style="border-bottom:1px solid var(--border);padding:14px 0;">
+            <div style="display:flex;align-items:baseline;gap:10px;">
+              <span style="font-size:15px;font-weight:bold;color:var(--text-main);">v${v.version}</span>
+              <span style="font-size:11px;color:var(--text-dim);">${v.date || ''}</span>
+            </div>
+            <div style="margin-top:6px;font-size:12px;color:var(--text-dim);font-style:italic;">
+              ${GB_ICON.icon('mdi-lock', 14)} 此版本更新涉及的玩法均未解锁，共 ${hiddenCount} 条改动暂不可见
+            </div>
+          </div>`;
+      }
+
+      // 正常情况
+      const hiddenHtml = hiddenCount > 0
+        ? `<div style="margin-top:8px;font-size:11.5px;color:var(--text-dim);">· 另有 <b style="color:var(--text-main);">${hiddenCount}</b> 条改动来自未解锁玩法，暂不可见</div>`
+        : '';
+
+      return `
+        <div style="border-bottom:1px solid var(--border);padding:14px 0;">
+          <div style="display:flex;align-items:baseline;gap:10px;">
+            <span style="font-size:15px;font-weight:bold;color:var(--text-main);">v${v.version}</span>
+            <span style="font-size:11px;color:var(--text-dim);">${v.date || ''}</span>
+          </div>
+          ${groupsHtml}
+          ${hiddenHtml}
+        </div>`;
+    }).join('');
+
+    const emptyHtml = notes.length === 0
+      ? `<div style="text-align:center;color:var(--text-dim);padding:40px 0;font-size:13px;">暂无版本记录</div>`
+      : versionsHtml;
+
+    const html = `
+      <div class="overlay" id="patchnotes-overlay" onclick="if(event.target===this)this.remove()">
+        <div class="modal" style="width:min(560px,94vw);max-height:80vh;display:flex;flex-direction:column;">
+          <button class="close-x" onclick="document.getElementById('patchnotes-overlay').remove()">${GB_ICON.icon('mdi-close', 22)}</button>
+          <h2 style="flex-shrink:0;">版本更新日志</h2>
+          <div style="overflow-y:auto;flex:1;padding-right:6px;">${emptyHtml}</div>
+          <div style="flex-shrink:0;display:flex;gap:8px;justify-content:flex-end;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+            <button class="gb-btn primary" onclick="document.getElementById('patchnotes-overlay').remove()">关闭</button>
           </div>
         </div>
       </div>`;

@@ -204,6 +204,7 @@ const CUR = {
   defs: {},
   values: {},
   capByMult: {},
+  currencyMults: {},
 
   prefix(key) { return key.split('_')[0]; },
   gainMultName(key) { return 'currency' + key.split('_').map(capitalize).join('') + 'Gain'; },
@@ -219,11 +220,25 @@ const CUR = {
     MULT.init(cm, Object.assign({ feature: def.feature || 'lm' }, def.capMult || {}));
     this.capByMult[cm] = key;
     if (def.currencyMult) {
-      Object.entries(def.currencyMult).forEach(([m, o]) => {
-        SYSTEM.applyEffect({ type: o.type, name: m, multKey: 'currencyMult_' + key, value: o.value });
-      });
+      this.currencyMults[key] = def.currencyMult;
+      this.refreshCurrencyMult(key);
     }
     return def;
+  },
+
+  /** 根据当前持有量刷新 currencyMult 派生效果（模仿 school 模块的做法） */
+  refreshCurrencyMult(key) {
+    const cm = this.currencyMults[key];
+    if (!cm) return;
+    const v = this.value(key);
+    for (const ckey in cm) {
+      const eff = cm[ckey];
+      const val = typeof eff.value === 'function' ? eff.value(v) : eff.value;
+      if (eff.type === 'mult') MULT.setMult({ name: ckey, key: 'currencyMult_' + key, value: val });
+      else if (eff.type === 'base') MULT.setBase({ name: ckey, key: 'currencyMult_' + key, value: val });
+      else if (eff.type === 'bonus') MULT.setBonus({ name: ckey, key: 'currencyMult_' + key, value: val });
+      else MULT.removeKeyAnywhere('currencyMult_' + key);
+    }
   },
 
   value(key) { const v = this.values[key]; return v === undefined ? 0 : v; },
@@ -244,16 +259,18 @@ const CUR = {
     if (v < 0) v = 0;
     if (isFinite(cap)) v = Math.min(v, Math.max(cap, this.value(key)));
     this.values[key] = v;
+    this.refreshCurrencyMult(key);
     if (v > 0 && UNLOCK.items['lm' + capitalize(this.prefix(key))]) { /* 保持与 gooboo 一致的惰性解锁语义 */ }
   },
 
   spend(key, amount) {
     if (this.value(key) < amount) return false;
     this.values[key] -= amount;
+    this.refreshCurrencyMult(key);
     return true;
   },
 
-  spendAll(key) { this.values[key] = 0; },
+  spendAll(key) { this.values[key] = 0; this.refreshCurrencyMult(key); },
 
   /** dispatch('currency/gain', {feature, name, amount}) */
   gain(o) {
@@ -529,7 +546,14 @@ const SYSTEM = {
 
   applyEffect(o) {
     if (!o) return;
-    const value = typeof o.value === 'function' ? o.value() : o.value;
+    // 防御：如果 value 还是函数（调用方忘了先算），调它不带参
+    // —— 绝大多函数本来就不需要参数（如 currencyMult 里函数是 val => val*x + 1，
+    //    这种被 CUR.refreshCurrencyMult 用实参 v 调；但如果这里误传过来，带 undefined 也能算个合理默认值）
+    //    —— UPG.apply 里的函数是 eff.value(lvl)，lvl 是数值；如果被误用为裸函数，那这里 o.value() 会返回 NaN，
+    //       但 UPG.apply 已经先算好 value 才传过来，所以正常不会走到
+    let value = o.value;
+    if (typeof value === 'function') { try { value = value(); } catch (e) { value = NaN; } }
+    if (!isFinite(value)) { /* 静默跳过，别污染 MULT cache */ return; }
     switch (o.type) {
       case 'mult': MULT.setMult({ name: o.name, key: o.multKey, value }); break;
       case 'base': MULT.setBase({ name: o.name, key: o.multKey, value }); break;

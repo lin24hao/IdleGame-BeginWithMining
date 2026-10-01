@@ -414,18 +414,17 @@ var GB_FA_VIEW = {
   /* ---------- 升级道法列表（复刻 gooboo UpgradeList） ---------- */
   renderUpgrades() {
     const defs = FA_UPG.defs;
-    const ids = Object.keys(defs).sort((a, b) => (defs[a]._map === 'upgrade' ? 0 : 1) - (defs[b]._map === 'upgrade' ? 0 : 1));
-    const regular = ids.filter(id => defs[id].type !== 'premium');
-    const premium = ids.filter(id => defs[id].type === 'premium');
-    // gate：整个「道法升级」panel 仅在至少一个升级可见时渲染（上品灵术 premium 始终渲染）
-    const anyVisible = premium.length > 0 || regular.some(id => this.safe(() => FA_UPG.isVisible(id), false));
+    // premium 升级归 gem 模块消费，农场主视图只渲染 regular
+    const ids = Object.keys(defs).filter(id => defs[id].type !== 'premium')
+      .sort((a, b) => (defs[a]._map === 'upgrade' ? 0 : 1) - (defs[b]._map === 'upgrade' ? 0 : 1));
+    // gate：整个「道法升级」panel 仅在至少一个 regular 升级可见时渲染
+    const anyVisible = ids.some(id => this.safe(() => FA_UPG.isVisible(id), false));
     if (!anyVisible) return '';
     const sc = data => data.map(id => this.renderUpgCard(id)).join('');
     return `
       <div class="fa-upg">
         <div class="fa-upg-title">升级道法</div>
-        ${sc(regular)}
-        ${premium.length ? `<div class="fa-upg-title ft">上品灵术</div>${sc(premium)}` : ''}
+        ${sc(ids)}
       </div>`;
   },
   renderUpgCard(id) {
@@ -436,7 +435,7 @@ var GB_FA_VIEW = {
     const canAfford = FA_UPG.canAfford(id);
     const maxed = FA_UPG.isMaxed(id);
     const visible = this.safe(() => FA_UPG.isVisible(id), false);
-    if (d.type !== 'premium' && !visible) return '';
+    if (!visible) return '';
     const price = FA_UPG.price(id);
     const priceHtml = Object.keys(price).map(k =>
       `<span class="fa-price ${FA_CUR.value(k) >= price[k] ? 'ok' : 'no'}">${this.curName(k)} ${this.fmt(price[k])}</span>`).join(' ');
