@@ -146,8 +146,28 @@ var GB_DAO_VIEW = {
     var m = GB_MODULES.get(modId);
     if (!m || !m.core || !m.core.UPG) return false;
     var upg = m.core.UPG;
-    if (typeof upg.buy === 'function') return upg.buy(upgId);
-    return false;
+    var def = upg.defs ? upg.defs[upgId] : null;
+    if (!def) return false;
+    // 达上限
+    if (upg.levels && def.cap != null && isFinite(def.cap) && (upg.levels[upgId] || 0) >= def.cap) return false;
+
+    // 拿 price，normalize 成 dao_ 键（gem_ruby → dao_chiyuan）
+    var price = this.getModuleUpgPrice(modId, upgId);
+    var norm = this.normalizePrice(price);
+    // 用 DAO_CUR（真正持有宝石的全局池）扣费
+    for (var k in norm) {
+      if (DAO_CUR.value(k) < norm[k]) {
+        this.toast('宝石不足，参悟失败');
+        return false;
+      }
+    }
+    for (var k2 in norm) DAO_CUR.spend(k2, norm[k2]);
+
+    // 手动升级（绕过各模块 CUR 对 gem_ruby 的 0 值 stub 检查）
+    upg.levels[upgId] = (upg.levels[upgId] || 0) + 1;
+    if (typeof upg.apply === 'function') upg.apply(upgId);
+    this.toast('参悟成功！' + (def.name || upgId), '#4ade80');
+    return true;
   },
 
   /* ---------- 速度计算（对齐 gooboo gem/genSpeedPrimary getter） ---------- */

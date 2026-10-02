@@ -28,6 +28,20 @@
 var GB_PATCHNOTES = [
 
   {
+    version: '0.4.1',
+    date: '2026-10-02',
+    groups: [
+
+      { feature: 'dao', sections: [
+        { type: 'fixed', label: '修复', items: [
+          '大道法则升级项无法购买，点击按钮无响应',
+        ]},
+      ]},
+
+    ]
+  },
+
+  {
     version: '0.4.0',
     date: '2026-10-02',
     groups: [

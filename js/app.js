@@ -637,7 +637,7 @@ var GB_APP = {
   },
 
   /** 当前版本号（与 patchnotes.js 最新版本一致） */
-  VERSION: '0.4.0',
+  VERSION: '0.4.1',
 
   _dbgClickCount: 0,
   _dbgClickTimer: null,
