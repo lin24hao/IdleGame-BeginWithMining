@@ -1,0 +1,449 @@
+﻿/* ============================================================
+ * dao.css ——「大道法则（dao）」模块样式
+ *
+ * 精确对标 gooboo Gem.vue 三列布局：
+ *   桌面：左 6 列（宝石卡）+ 中 3 列（进度条）+ 右 3 列（升级/锻造）
+ *   手机：单列纵向堆叠（Gem.vue v-row no-gutters 响应式）
+ *
+ * 依赖 base.css 变量：
+ *   --text-main, --surface-panel-dark, --border, --accent (#d4a855)
+ *   --panel-bright (#24242e), --text-dim, --cyan (#06b6d4)
+ * ============================================================ */
+
+/* ---------- 主容器：三列 flex 布局 ---------- */
+.dao-wrap {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dao-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* 左列 —— 6/12 ≈ 50% */
+.dao-col-gems { flex: 6 1 0; min-width: 0; }
+/* 中列 —— 3/12 ≈ 25% */
+.dao-col-progress { flex: 3 1 0; min-width: 0; }
+/* 右列 —— 3/12 ≈ 25% */
+.dao-col-shop { flex: 3 1 0; min-width: 0; }
+
+/* ---------- 列标题 ---------- */
+.dao-col-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim, #9a9ab0);
+  letter-spacing: 1px;
+  padding: 0 4px;
+}
+
+/* ---------- 左列：7 元宝石卡片（GemList.vue） ---------- */
+.dao-gem-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px;
+}
+
+.dao-gem-card {
+  flex: 1 1 calc(50% - 8px);
+  min-width: 120px;
+  background: var(--surface-panel-dark, #181820);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.dao-gem-card:hover {
+  border-color: rgba(255,255,255,0.25);
+  transform: translateY(-1px);
+}
+
+.dao-gem-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.dao-gem-name {
+  font-size: 12px;
+  color: var(--text-dim, #9a9ab0);
+  letter-spacing: 0.5px;
+}
+
+.dao-gem-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: 'SF Mono', Consolas, monospace;
+}
+
+.dao-gem-cap-bar {
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+.dao-gem-cap-bar > div { height: 100%; transition: width 0.3s; }
+
+.dao-gem-cap {
+  font-size: 10px;
+  color: var(--text-dim, #9a9ab0);
+  opacity: 0.7;
+}
+
+/* ---------- 中列：三进度条（Gem.vue v-progress-linear） ---------- */
+.dao-prog-wrap { display: flex; flex-direction: column; gap: 4px; }
+
+.dao-prog-bar {
+  position: relative;
+  height: 24px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+}
+
+.dao-prog-fill {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  border-radius: 3px;
+  transition: width 0.2s linear;
+}
+
+/* 主进度：暖金色 */
+.dao-prog-primary .dao-prog-fill {
+  background: linear-gradient(90deg, #d4a855, #f0c060);
+}
+/* 次进度：冷紫色 */
+.dao-prog-secondary .dao-prog-fill {
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+}
+/* 稀有进度：青色 */
+.dao-prog-diamond .dao-prog-fill {
+  background: linear-gradient(90deg, #06b6d4, #22d3ee);
+}
+/* 锁定状态 */
+.dao-prog-locked {
+  background: rgba(255,255,255,0.03);
+  border-style: dashed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dao-prog-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+
+.dao-prog-desc {
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+  text-align: center;
+  padding: 0 2px;
+  line-height: 1.4;
+}
+
+/* ---------- 右列：锻造/升级 Header ---------- */
+.dao-forge-header,
+.dao-shop-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+/* 锻造模式 —— 大标题（Gem.vue diamond-forge glow text） */
+.dao-forge-title {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--cyan, #06b6d4);
+  text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+  letter-spacing: 2px;
+}
+
+.dao-forge-hunyuan {
+  font-size: 13px;
+  font-family: 'SF Mono', Consolas, monospace;
+  color: var(--cyan, #06b6d4);
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 升级模式 —— 下拉框（Gem.vue v-select outlined） */
+.dao-shop-select {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--border, rgba(255,255,255,0.2));
+  border-radius: 6px;
+  color: var(--text-main, #fff);
+  font-size: 13px;
+  padding: 6px 10px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'><path d='M5.5 7.5l4.5 4.5 4.5-4.5z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 16px;
+  padding-right: 28px;
+}
+.dao-shop-select:hover { border-color: rgba(255,255,255,0.35); }
+.dao-shop-select:focus { border-color: var(--accent, #d4a855); }
+.dao-shop-select option { background: #181820; color: #fff; }
+
+/* anvil 切换按钮（Gem.vue v-btn color="cyan" icon） */
+.dao-mode-btn {
+  background: transparent;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  color: var(--cyan, #06b6d4);
+  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.dao-mode-btn:hover {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: var(--cyan, #06b6d4);
+  box-shadow: 0 0 8px rgba(6, 182, 212, 0.4);
+}
+.dao-mode-btn.active {
+  background: rgba(6, 182, 212, 0.25);
+  border-color: var(--cyan, #06b6d4);
+}
+
+/* ---------- 锻造卡片（DiamondForge.vue + ForgeItem.vue） ---------- */
+.dao-forge-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-panel-dark, #181820);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 8px;
+  padding: 10px;
+  transition: border-color 0.15s;
+}
+.dao-forge-card:hover { border-color: rgba(6, 182, 212, 0.3); }
+
+.dao-forge-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dao-forge-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.dao-forge-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main, #fff);
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dao-forge-type {
+  font-size: 11px;
+  color: var(--cyan, #06b6d4);
+  margin-bottom: 3px;
+}
+
+.dao-forge-eff {
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+  line-height: 1.4;
+}
+
+.dao-forge-buy {
+  background: transparent;
+  border: 1px solid rgba(6, 182, 212, 0.5);
+  color: var(--cyan, #06b6d4);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-family: 'SF Mono', Consolas, monospace;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dao-forge-buy:hover:not(.disabled) {
+  background: rgba(6, 182, 212, 0.15);
+  box-shadow: 0 0 8px rgba(6, 182, 212, 0.3);
+}
+.dao-forge-buy.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: rgba(255,255,255,0.15);
+  color: var(--text-dim, #9a9ab0);
+}
+
+/* ---------- 升级卡片（UpgradeList.vue） ---------- */
+.dao-upg-header {
+  font-size: 12px;
+  color: var(--text-dim, #9a9ab0);
+  letter-spacing: 1px;
+  padding: 2px 4px;
+}
+
+.dao-upg-card {
+  background: var(--surface-panel-dark, #181820);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.15s;
+}
+.dao-upg-card:hover { border-color: rgba(255,255,255,0.25); }
+.dao-upg-card.maxed { opacity: 0.6; }
+
+.dao-upg-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main, #fff);
+}
+
+.dao-upg-lv {
+  font-size: 11px;
+  color: var(--accent, #d4a855);
+  font-family: 'SF Mono', Consolas, monospace;
+}
+
+.dao-upg-eff {
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+  line-height: 1.4;
+}
+
+.dao-upg-next {
+  color: var(--accent, #d4a855);
+}
+
+.dao-upg-buy {
+  background: var(--surface-panel-dark, #181820);
+  border: 1px solid var(--border, rgba(255,255,255,0.15));
+  color: var(--text-dim, #9a9ab0);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.dao-upg-buy.can-afford {
+  border-color: var(--accent, #d4a855);
+  color: var(--accent, #d4a855);
+}
+.dao-upg-buy.can-afford:hover {
+  background: rgba(212, 168, 85, 0.1);
+  box-shadow: 0 0 8px rgba(212, 168, 85, 0.25);
+}
+.dao-upg-buy:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- 空状态 ---------- */
+.dao-empty {
+  background: var(--surface-panel-dark, #181820);
+  border: 1px dashed var(--border, rgba(255,255,255,0.15));
+  border-radius: 8px;
+  padding: 20px 12px;
+  text-align: center;
+}
+.dao-empty-msg {
+  font-size: 13px;
+  color: var(--text-main, #fff);
+  margin-bottom: 4px;
+}
+.dao-empty-hint {
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+}
+
+/* ---------- 移动端：单列堆叠（Gem.vue v-col cols="12"） ---------- */
+@media (max-width: 768px) {
+  .dao-wrap {
+    flex-direction: column;
+    gap: 16px;
+    padding: 6px;
+  }
+  .dao-col-gems,
+  .dao-col-progress,
+  .dao-col-shop {
+    flex: none;
+    width: 100%;
+  }
+  .dao-gem-card {
+    flex: 1 1 calc(33.333% - 6px);
+    min-width: 90px;
+    padding: 8px;
+  }
+  .dao-gem-icon { width: 32px; height: 32px; }
+  .dao-gem-value { font-size: 16px; }
+  .dao-prog-bar { height: 22px; }
+  .dao-forge-title { font-size: 15px; }
+}
+
+@media (max-width: 420px) {
+  .dao-gem-card {
+    flex: 1 1 calc(50% - 6px);
+  }
+  .dao-prog-bar { height: 20px; }
+  .dao-prog-text { font-size: 11px; }
+  .dao-forge-card { flex-wrap: wrap; }
+  .dao-forge-buy { width: 100%; margin-top: 4px; }
+}

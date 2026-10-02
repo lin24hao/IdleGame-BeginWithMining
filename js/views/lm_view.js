@@ -21,11 +21,15 @@ var GB_LM_VIEW = {
   statName(k) { const x = LM_TEXT && LM_TEXT.STAT, kk = String(k).replace(/^lm_/, ''); return (x && x[kk]) || kk; },
   curName(k) {
     const x = LM_TEXT && LM_TEXT.CURRENCY;
-    if (x && x[k]) return x[k];
-    // 先查全小写
-    const lk = String(k).toLowerCase();
+    const raw = String(k);
+    if (x && x[raw]) return x[raw];
+    // 首字母小写后拼回（处理 lm_OreAluminium → lm_oreAluminium）
+    const m = raw.match(/^(lm_)([A-Z])(.+)$/);
+    if (m && x && x[m[1] + m[2].toLowerCase() + m[3]]) return x[m[1] + m[2].toLowerCase() + m[3]];
+    // 全小写
+    const lk = raw.toLowerCase();
     if (x && x[lk]) return x[lk];
-    return String(k).replace(/^lm_/, '').replace(/([A-Z])/g, ' $1').trim();
+    return raw.replace(/^lm_/, '').replace(/([A-Z])/g, ' $1').trim();
   },
   upgName(id) {
     const x = LM_TEXT && LM_TEXT.UPGRADE;
@@ -38,32 +42,25 @@ var GB_LM_VIEW = {
   /* ---------- 辅助：把 mult/base/bonus 的 name 转中文描述 ---------- */
   effectDisplayName(name) {
     if (!name) return '';
-    // currencyLmXxxGain / currencyLmXxxCap（注意捕获组先转小写再查 CURRENCY 字典）
+    // currencyLmXxxGain / currencyLmXxxCap → 首字母小写后拼 lm_（CURRENCY 字典 key 是 lm_oreAluminium 这种小写起头的驼峰）
     const mGain = name.match(/^currencyLm(.+)Gain$/);
-    if (mGain) return this.curName('lm_' + mGain[1].toLowerCase()) + '产出';
+    if (mGain) return this.curName('lm_' + mGain[1][0].toLowerCase() + mGain[1].slice(1)) + '产出';
     const mCap = name.match(/^currencyLm(.+)Cap$/);
-    if (mCap) return this.curName('lm_' + mCap[1].toLowerCase()) + '容量';
-    // upgradeLmXxxCap
+    if (mCap) return this.curName('lm_' + mCap[1][0].toLowerCase() + mCap[1].slice(1)) + '容量';
+    // upgradeLmXxxCap → 驼峰 key 去 UPGRADE 字典查（upgName 内部去 lm_ 前缀后查）
     const uCap = name.match(/^upgradeLm(.+)Cap$/);
-    if (uCap) return this.upgName('lm_' + uCap[1].toLowerCase()) + '上限';
-    // lmDamage → TERMS.damage → 破岩（捕获组先小写）
+    if (uCap) return this.upgName('lm_' + uCap[1]) + '上限';
+    // lmOreCap / lmDamage → 先驼峰查 TERMS/STAT/UPGRADE，再 lower 查（字典 key 混合两种格式）
     const lm = name.match(/^lm(.+)$/);
     if (lm) {
-      const key = lm[1].toLowerCase();
-      // 先查 TERMS
-      if (LM_TEXT && LM_TEXT.TERMS && LM_TEXT.TERMS[key]) return LM_TEXT.TERMS[key];
-      // 再查 STAT
-      if (LM_TEXT && LM_TEXT.STAT && LM_TEXT.STAT[key]) return LM_TEXT.STAT[key];
-      // 再查 UPGRADE
-      if (LM_TEXT && LM_TEXT.UPGRADE && LM_TEXT.UPGRADE[key]) return LM_TEXT.UPGRADE[key];
-      // 最后降级：驼峰转空格
-      return lm[1].replace(/([A-Z])/g, ' $1').trim();
+      const camel = lm[1];          // 驼峰：OreCap
+      const low = camel.toLowerCase(); // 全小写：orecap
+      const tb = LM_TEXT.TERMS; const st = LM_TEXT.STAT; const up = LM_TEXT.UPGRADE;
+      if (tb && (tb[camel] || tb[low])) return tb[camel] || tb[low];
+      if (st && (st[camel] || st[low])) return st[camel] || st[low];
+      if (up && (up[camel] || up[low])) return up[camel] || up[low];
+      return camel.replace(/([A-Z])/g, ' $1').trim();
     }
-    // currency* 通用（没有 lm_ 前缀的）
-    const cGain = name.match(/^currencyLm(.+)Gain$/i);
-    if (cGain) return this.curName('lm_' + cGain[1].toLowerCase()) + '产出';
-    const cCap = name.match(/^currencyLm(.+)Cap$/i);
-    if (cCap) return this.curName('lm_' + cCap[1].toLowerCase()) + '容量';
     return name;
   },
 
@@ -118,7 +115,14 @@ var GB_LM_VIEW = {
 
   /* ---------- 生命周期 ---------- */
   mount(root) {
-    if (this.el === root) { this.render(); return; }
+    if (this.el === root) {
+      this.render();
+      // 即使是同一个 root，也确保自动挖矿 timer 在跑（有时会被 clearInterval 后未重启）
+      if (!this._autoMineTimer) {
+        this._autoMineTimer = setInterval(() => { this._playAutoMineHit(); }, 1000);
+      }
+      return;
+    }
     this.el = root;
     root.innerHTML = `
       <div class="gb-tabs">
@@ -180,18 +184,40 @@ var GB_LM_VIEW = {
   },
   setTab(t) {
     this.tab = t;
+    this._resetScroll = true;
     const root = this.el;
     if (!root) return;
     root.querySelectorAll('.gb-tab').forEach(b => b.classList.toggle('active', b.getAttribute('data-tab') === t));
     this.render();
   },
   render() {
-    const now = Date.now();
-    if (now - this._lastRender < 200) { this._lastRender = now; }
     const content = this.el && this.el.querySelector('#lm-content');
     if (!content) return;
-    this._lastRender = now;
+
+    // --- 保存所有滚动容器的位置（外层 + 内层 .scroll-container-tab）---
+    const reset = this._resetScroll;
+    this._resetScroll = false;
+    const saved = reset ? null : {
+      outer: content.scrollTop,
+      // 所有内层 scroll-container-tab 的滚动位置（按 DOM 顺序保存/恢复）
+      innerTabs: Array.from(content.querySelectorAll('.scroll-container-tab')).map(el => el.scrollTop),
+      // 升级卡网格的独立滚动（如果存在）
+      innerGrids: Array.from(content.querySelectorAll('.lm-upg-grid-scroll')).map(el => el.scrollTop),
+    };
+
     content.innerHTML = this.tab === 'dweller' ? this.renderDweller() : this.renderMine();
+
+    // --- 恢复所有滚动位置 ---
+    if (saved) {
+      content.scrollTop = saved.outer;
+      // 内层 tab 滚动（右列秘法升级列表 / 驻脉状态列）
+      const newTabs = content.querySelectorAll('.scroll-container-tab');
+      newTabs.forEach((el, i) => { if (saved.innerTabs[i] != null) el.scrollTop = saved.innerTabs[i]; });
+      // 升级网格滚动（弹层里的飞升秘法网格）
+      const newGrids = content.querySelectorAll('.lm-upg-grid-scroll');
+      newGrids.forEach((el, i) => { if (saved.innerGrids[i] != null) el.scrollTop = saved.innerGrids[i]; });
+    }
+
     if (this._pendingDurPct != null) this._easeHp();
   },
 
@@ -248,7 +274,7 @@ var GB_LM_VIEW = {
 
     const depthNav = `
       <div class="depth-nav">
-        ${this.icon('mdi-skip-backward',28)}<button class="gb-btn icon" ${depth<=1?'disabled':''} onclick="GB_LM_VIEW.handleAction('depth:1')">${GB_ICON.icon('mdi-skip-backward',20)}</button>
+        <button class="gb-btn icon" ${depth<=1?'disabled':''} onclick="GB_LM_VIEW.handleAction('depth:1')">${GB_ICON.icon('mdi-skip-backward',20)}</button>
         <button class="gb-btn icon" ${depth<=1?'disabled':''} onclick="GB_LM_VIEW.handleAction('depth:${Math.max(1,depth-10)}')">${GB_ICON.icon('mdi-step-backward-2',20)}</button>
         <button class="gb-btn icon" ${depth<=1?'disabled':''} onclick="GB_LM_VIEW.handleAction('depth:${depth-1}')">${GB_ICON.icon('mdi-step-backward',20)}</button>
         <span class="depth-val">${depth}层</span>
@@ -1283,7 +1309,7 @@ var GB_LM_VIEW = {
           <button class="gb-btn small primary" data-buy="${id}" ${canBuy?'':'disabled'}>参悟</button>
           <span class="upg-collapsed-price" data-tip="${Object.keys(price).map(k=>this.curName(k)+' '+this.fmt(price[k])).join(' + ')||'免费'}">${priceTxt}</span>
           ${lockIcon}
-          <button class="upg-toggle-btn" data-toggle-collapse="${id}" data-tip="展开">${GB_ICON.icon('mdi-arrow-expand-all', 16)}</button>
+          <button class="upg-toggle-btn" data-toggle-collapse="${id}" data-tip="展开">${GB_ICON.icon('mdi-chevron-up', 16)}</button>
         </div>`;
     }
 
@@ -1311,7 +1337,7 @@ var GB_LM_VIEW = {
 
     return `
       <div class="upg-card upg-expanded ${canBuy?'can':''}">
-        <button class="upg-toggle-btn top-right" data-toggle-collapse="${id}" data-tip="折叠">${GB_ICON.icon('mdi-arrow-collapse-all', 16)}</button>
+        <button class="upg-toggle-btn top-right" data-toggle-collapse="${id}" data-tip="折叠">${GB_ICON.icon('mdi-chevron-up', 16)}</button>
         ${lockIcon}
         <div class="upg-header">
           <span class="upg-level-chip">${GB_ICON.icon('mdi-chevron-double-up', 12)}${lvl}${isFinite(cap)?'/'+cap:''}</span>

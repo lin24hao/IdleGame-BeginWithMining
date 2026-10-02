@@ -29,6 +29,9 @@ var GB_MODULES = {
     village: 'village',
     horde: 'horde',
     farm: 'farm',
+    dao: 'dao',
+    relic: 'rel',
+    treasure: 'treasure',
     // gallery（gooboo 画廊）暂不移植 — gallery effect 变成 no-op
   },
   resetting: false,

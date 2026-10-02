@@ -66,7 +66,7 @@ var GB_HO_VIEW = {
     this.stopLoop();
     this.el = null;
   },
-  setTab(t) { this.tab = t; this.render(); },
+  setTab(t) { this.tab = t; this._resetScroll = true; this.render(); },
 
   /* ---------- 事件 ---------- */
   onClick(e) {
@@ -321,10 +321,13 @@ var GB_HO_VIEW = {
     if (!tabs || !content) return;
     const t = this.getTabs();
     if (!t.some(x => x.id === this.tab)) this.tab = t[0].id;
+    const keep = this._resetScroll ? 0 : content.scrollTop;
+    this._resetScroll = false;
     tabs.innerHTML = t.map(x => `<button class="gb-tab ${x.id === this.tab ? 'active' : ''}" data-hact="tab:${x.id}">${this.icon(x.icon, 18)}${x.name}</button>`).join('');
     content.innerHTML = this.tab === 'heirlooms' ? this.renderHeirlooms() :
       this.tab === 'battlepass' ? this.renderBattlePass() :
       this.tab === 'souls' ? this.renderSouls() : this.renderBattle();
+    content.scrollTop = keep;
   },
   getTabs() {
     const t = [{ id: 'horde', name: '降妖', icon: 'mdi-account-group' }];

@@ -67,17 +67,20 @@ var GB_FA_VIEW = {
     this.stopLoop();
     this.el = null;
   },
-  setTab(t) { this.tab = t; this.render(); },
+  setTab(t) { this.tab = t; this._resetScroll = true; this.render(); },
   render() {
     const el = this.el; if (!el) return;
     const tabs = el.querySelector('#fa-tabs');
     const content = el.querySelector('#fa-content');
     if (!tabs || !content) return;
+    const keep = this._resetScroll ? 0 : content.scrollTop;
+    this._resetScroll = false;
     tabs.innerHTML = this.getTabs().map(t =>
       `<button class="gb-tab ${t.id === this.tab ? 'active' : ''}" data-tab="${t.id}" onclick="GB_FA_VIEW.setTab('${t.id}')">${this.icon(t.icon, 18)}${t.name}</button>`
     ).join('');
     if (!this.getTabs().some(t => t.id === this.tab)) this.tab = 'farm';
     content.innerHTML = this.currentTabContent();
+    content.scrollTop = keep;
   },
   getTabs() {
     return [{ id: 'farm', name: '灵田', icon: 'mdi-barn' }, { id: 'inventory', name: '仓库', icon: 'mdi-archive' }];

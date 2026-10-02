@@ -46,8 +46,8 @@ var GB_APP = {
         desc: '天生地养的先天灵宝，寻获可增益修为，供奉可加持造化。' },
       { id: 'xianqi', name: '仙器', icon: 'mdi-sword-cross', color: 'c-info', unlockKey: 'xianqiFeature',
         desc: '炼器大成者所铸仙器，自带威灵，可随日夜精进，威力与日俱增。' },
-      { id: 'general', name: '仙尊指引', icon: 'mdi-book-open', color: 'c-primary', unlockKey: 'generalFeature',
-        desc: '上古仙尊留下的修行指引，按其条件逐步完成，可得真传。' }
+      { id: 'general', name: '圣人指引', icon: 'mdi-book-open', color: 'c-primary', unlockKey: 'generalFeature',
+        desc: '上古圣人留下的修行指引，按其条件逐步完成，可得真传。' }
     ]}
   ],
 
@@ -512,16 +512,28 @@ var GB_APP = {
       GB_RU_VIEW.render();
       return;
     }
-    // 已解锁但尚未实现的模块（dao / lingbao / xianqi / general）
-    if (['dao', 'lingbao', 'xianqi', 'general'].indexOf(feature) >= 0) {
-      const t = this._findTile(feature);
-      root.innerHTML = `
-        <div class="empty-hint" style="padding:40px 20px;text-align:center;">
-          <div style="font-size:48px;margin-bottom:16px;">✨</div>
-          <h2 style="color:var(--text-main);margin-bottom:8px;">${t ? t.name : '此玩法'}即将推出</h2>
-          <p style="color:var(--text-dim);font-size:13px;">解锁达成，但该玩法正在开发中，敬请期待。</p>
-          <button class="gb-btn" onclick="GB_APP.navigate('home')" style="margin-top:16px;">返回首页</button>
-        </div>`;
+    if (feature === 'dao' && typeof GB_DAO_VIEW !== 'undefined') {
+      this.activeView = GB_DAO_VIEW;
+      GB_DAO_VIEW.mount(root);
+      GB_DAO_VIEW.render();
+      return;
+    }
+    if (feature === 'lingbao' && typeof GB_REL_VIEW !== 'undefined') {
+      this.activeView = GB_REL_VIEW;
+      GB_REL_VIEW.mount(root);
+      GB_REL_VIEW.render();
+      return;
+    }
+    if (feature === 'xianqi' && typeof GB_XQ_VIEW !== 'undefined') {
+      this.activeView = GB_XQ_VIEW;
+      GB_XQ_VIEW.mount(root);
+      GB_XQ_VIEW.render();
+      return;
+    }
+    if (feature === 'general' && typeof GB_GEN_VIEW !== 'undefined') {
+      this.activeView = GB_GEN_VIEW;
+      GB_GEN_VIEW.mount(root);
+      GB_GEN_VIEW.render();
       return;
     }
     root.innerHTML = `<div class="empty-hint">模块尚未开放。</div>`;
@@ -595,6 +607,9 @@ var GB_APP = {
         <div class="theme-dot ${this.theme === t.id ? 'sel' : ''}" style="background:linear-gradient(135deg,${t.c1},${t.c2});"></div>
         <span>${t.label}</span>
       </div>`).join('');
+    const dbgBtn = (typeof GB_DEBUG !== 'undefined' && GB_DEBUG.isUnlocked())
+      ? `<div class="set-row"><span>🛠 调试模式</span><div class="gb-btn small warning" onclick="GB_DEBUG.open()">打开调试面板</div></div>`
+      : `<div class="set-row"><span class="text-dim">🛠 调试模式</span><span class="dim" style="font-size:11px;">在「关于」页面连续点击版本号 5 次开启</span></div>`;
     const html = `
       <div class="overlay" id="settings-overlay" onclick="if(event.target===this)this.remove()">
         <div class="modal">
@@ -605,6 +620,7 @@ var GB_APP = {
             <div class="gb-btn small primary" onclick="GB_APP.cycleTheme()">切换主题</div>
           </div>
           <div class="set-row"><span>存档与离线</span><span class="dim">每 30 秒自动保存，离线按最多 8 小时结算</span></div>
+          ${dbgBtn}
           <div class="set-row" style="border-bottom:none;"><span></span>
             <div class="gb-btn small error" onclick="if(confirm('确定清空全部进度并重新开始？')){GB_APP.hardReset()}">重置存档</div>
           </div>
@@ -621,9 +637,13 @@ var GB_APP = {
   },
 
   /** 当前版本号（与 patchnotes.js 最新版本一致） */
-  VERSION: '0.3.1',
+  VERSION: '0.4.0',
+
+  _dbgClickCount: 0,
+  _dbgClickTimer: null,
 
   openAbout() {
+    const already = typeof GB_DEBUG !== 'undefined' && GB_DEBUG.isUnlocked();
     const html = `
       <div class="overlay" id="about-overlay" onclick="if(event.target===this)this.remove()">
         <div class="modal" style="width:min(480px,92vw);">
@@ -634,9 +654,15 @@ var GB_APP = {
             <p>忠实复刻 gooboo 的挖矿放置玩法与美术风格，数值沿用 gooboo 原作设定，
                仅将设定改写为修仙主题，并全部改为中文界面。</p>
             <p>· M 键 = 返回首页<br>· 全程本地存档 <span class="mono" style="opacity:.6;">localStorage</span></p>
-            <p style="margin-top:12px;color:var(--text-dim);font-size:12px;">当前版本 v${this.VERSION}</p>
+            <p style="margin-top:12px;color:var(--text-dim);font-size:12px;">当前版本
+              <span id="about-version" style="cursor:default;user-select:none;padding:2px 6px;border-radius:3px;${already ? 'color:var(--clr-warning);' : ''}"
+                    ${already ? '' : 'title:"连续点击 5 次解锁调试模式"'}
+                    onclick="GB_APP._onVersionClick(this)">v${this.VERSION}</span>
+              ${already ? '<span style="font-size:10px;color:var(--clr-warning);">· 调试模式已解锁</span>' : ''}
+            </p>
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+            ${already ? `<button class="gb-btn warning" onclick="GB_DEBUG.open()">${GB_ICON.icon('mdi-bug', 18)} 调试面板</button>` : ''}
             <button class="gb-btn" onclick="document.getElementById('about-overlay').remove()">关闭</button>
             <button class="gb-btn primary" onclick="document.getElementById('about-overlay').remove();GB_APP.openPatchnotes()">
               ${GB_ICON.icon('mdi-file-document-multiple', 18)} 版本更新日志
@@ -647,6 +673,32 @@ var GB_APP = {
     document.body.insertAdjacentHTML('beforeend', html);
   },
 
+  /** About 页面版本号点击彩蛋：5 次内点完解锁调试模式 */
+  _onVersionClick(el) {
+    if (typeof GB_DEBUG === 'undefined') return;
+    if (GB_DEBUG.isUnlocked()) { GB_DEBUG.open(); return; }
+    this._dbgClickCount++;
+    if (this._dbgClickTimer) clearTimeout(this._dbgClickTimer);
+    this._dbgClickTimer = setTimeout(() => { this._dbgClickCount = 0; }, 2000);
+    if (this._dbgClickCount >= 5) {
+      this._dbgClickCount = 0;
+      GB_DEBUG.unlock();
+      // 视觉反馈：版本号闪烁
+      if (el) {
+        el.style.transition = 'color .3s, background .3s';
+        el.style.color = 'var(--clr-warning)';
+        el.style.background = 'rgba(255,152,0,0.15)';
+      }
+      this.toast('🛠 调试模式已解锁！可在「设置」中打开调试面板', '#ff9800');
+      // 重新渲染 About 面板（让按钮出现）
+      setTimeout(() => {
+        const overlay = document.getElementById('about-overlay');
+        if (overlay) overlay.remove();
+        this.openAbout();
+      }, 800);
+    }
+  },
+
   /** 版本更新日志弹窗 */
   openPatchnotes() {
     const notes = (typeof GB_PATCHNOTES !== 'undefined') ? GB_PATCHNOTES : [];
@@ -655,7 +707,7 @@ var GB_APP = {
     const FEATURE_NAMES = {
       meta: '全局',
       lm: '灵脉', village: '宗门', farm: '灵植园', horde: '降妖', ruin: '秘境',
-      school: '藏经阁', dao: '大道法则', lingbao: '先天灵宝', xianqi: '仙器', general: '仙尊指引',
+      school: '藏经阁', dao: '大道法则', lingbao: '先天灵宝', xianqi: '仙器', general: '圣人指引',
     };
     // feature id → GB_UNLOCK.isUnlocked() 的 key（与 app.js features[].unlockKey 一致）
     const FEATURE_UNLOCK_KEY = {

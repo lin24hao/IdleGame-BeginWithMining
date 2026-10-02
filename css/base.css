@@ -36,6 +36,11 @@
 
   --outline-strong: 3px solid var(--outline-color);
   --shadow-elevation: 0 2px 4px rgba(0, 0, 0, 0.25);
+
+  /* 卡片 / 进度条底色（跨模块共用） */
+  --bg-card: rgba(255, 255, 255, 0.08);
+  --bg-card-elevated: rgba(255, 255, 255, 0.14);
+  --bg-progress: rgba(255, 255, 255, 0.15);
 }
 
 /* 暗色主题（默认） */
@@ -74,6 +79,11 @@
   --surface-subtle: rgba(0, 0, 0, 0.06);
   --surface-input: #FFFFFF;
   --shadow-elevation: 0 2px 4px rgba(0, 0, 0, 0.12);
+
+  /* 浅色主题覆盖卡片底色（白背景用半透明深色叠层保证对比） */
+  --bg-card: rgba(0, 0, 0, 0.06);
+  --bg-card-elevated: rgba(0, 0, 0, 0.1);
+  --bg-progress: rgba(0, 0, 0, 0.12);
 }
 
 /* ---------- 1. 全局 ---------- */
@@ -348,8 +358,10 @@ body {
 .gb-btn.primary { background: var(--clr-primary); }
 .gb-btn.success { background: var(--clr-success); }
 .gb-btn.error { background: var(--clr-error); }
+.gb-btn.warning { background: var(--clr-warning, #ff9800); }
 .gb-btn.grey { background: var(--grey-8); }
 .gb-btn.small { padding: 3px 10px; font-size: 12px; }
+.gb-btn.tiny { padding: 1px 6px; font-size: 10px; }
 .gb-btn.icon { padding: 6px; width: 34px; height: 34px; justify-content: center; background: var(--surface-subtle); }
 .gb-btn.ghost { background: transparent; color: var(--text-main); border: var(--card-border-thin); }
 
@@ -520,12 +532,14 @@ body {
   height: 24px;
   border-radius: 4px;
   padding: 0;
-  transition: background .15s ease, color .15s ease;
+  transition: background .15s ease, color .15s ease, transform .15s ease;
 }
 .upg-toggle-btn:hover {
   background: var(--surface-subtle);
   color: var(--text-main);
 }
+/* 折叠态 chevron-up 旋转 180° → 变成向下的 V（表示"还有更多可以展开"） */
+.upg-card.upg-collapsed .upg-toggle-btn { transform: rotate(180deg); }
 
 /* 飞升后保留锁图标 */
 .upg-lock {
@@ -1037,3 +1051,156 @@ body {
   .landing-moon { width: 50px; height: 50px; }
   .landing-btn { padding: 12px 28px; font-size: 14px; letter-spacing: 1px; }
 }
+
+/* ============ 调试面板样式 ============ */
+.debug-section { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.debug-section:last-child { margin-bottom: 0; border-bottom: none; }
+.debug-title { font-size: 13px; font-weight: bold; color: var(--clr-warning); margin-bottom: 6px; padding-bottom: 4px; }
+.debug-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; flex-wrap: wrap; }
+.debug-label { color: var(--text-sub); min-width: 130px; font-size: 12px; }
+#debug-body details summary::-webkit-details-marker { display: none; }
+#debug-body details summary::marker { content: ''; }
+
+/* ============ 先天灵宝模块样式 ============ */
+.bg-progress { background: rgba(128,128,128,0.25); }
+
+/* Tab 栏 */
+.rel-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-card);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 10px;
+}
+.rel-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rel-tab:hover {
+  color: var(--text-main);
+  background: rgba(255,255,255,0.05);
+}
+.rel-tab.active {
+  color: var(--text-main);
+  background: var(--bg-card-elevated, rgba(130,177,255,0.15));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.rel-tab svg { opacity: 0.9; }
+
+.rel-tab-body {
+  min-height: 200px;
+}
+
+/* 响应式：窄屏时 2 列变 1 列 */
+@media (max-width: 700px) {
+  .rel-tab-body > div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ============ 全局基础组件（跨模块共用） ============ */
+
+/* 按钮：默认 secondary（半透明灰底 + 白字） */
+.gb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: 6px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  user-select: none;
+  white-space: nowrap;
+}
+.gb-btn:hover { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.35); }
+.gb-btn:active { transform: translateY(1px); }
+.gb-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.gb-btn.primary { background: var(--clr-primary, #1976D2); border-color: transparent; }
+.gb-btn.primary:hover { filter: brightness(1.15); background: var(--clr-primary, #1976D2); }
+
+.gb-btn.small { font-size: 11px; padding: 4px 10px; border-radius: 5px; }
+
+/* 浅色主题按钮：白字改成黑字，背景用半透明深色 */
+.theme-light .gb-btn {
+  color: #000;
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.22);
+}
+.theme-light .gb-btn:hover { background: rgba(0, 0, 0, 0.14); border-color: rgba(0, 0, 0, 0.3); }
+.theme-light .gb-btn.primary { color: #fff; background: var(--clr-primary, #1976D2); border-color: transparent; }
+
+/* 下拉选择框 */
+.gb-select,
+.gb-pedestal-select {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-main);
+  background: var(--bg-card);
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  padding: 4px 6px;
+  cursor: pointer;
+  outline: none;
+}
+.gb-select:focus,
+.gb-pedestal-select:focus { border-color: var(--clr-accent, #82B1FF); }
+.gb-pedestal-select[multiple] { min-height: 60px; }
+.gb-pedestal-select[multiple] option {
+  padding: 2px 4px;
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+.gb-pedestal-select[multiple] option:checked {
+  background: rgba(130, 177, 255, 0.35);
+}
+
+/* 浅色主题下拉框 */
+.theme-light .gb-select,
+.theme-light .gb-pedestal-select {
+  color: #000;
+  background: #fff;
+  border-color: rgba(0, 0, 0, 0.22);
+}
+.theme-light .gb-pedestal-select[multiple] option { background: #fff; color: #000; }
+.theme-light .gb-pedestal-select[multiple] option:checked {
+  background: #1976D2;
+  color: #fff;
+}
+
+/* 卡片容器（通用） */
+.gb-card {
+  background: var(--bg-card);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+/* 圆点徽章 */
+.rel-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 2px;
+}
+

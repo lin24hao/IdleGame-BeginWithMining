@@ -127,7 +127,8 @@ const VI_CUR = {
     const gm = this.gainMultName(key), cm = this.capMultName(key);
     VI_MULT.init(gm, Object.assign({ feature: def.feature || 'village' }, def.gainMult || {}));
     VI_MULT.init(cm, Object.assign({ feature: def.feature || 'village' }, def.capMult || {}));
-    this.capByMult[cm] = key;
+    // 只有真正有 capMult 定义的资源才登记到 capByMult，没容量的资源 cap() 返回 Infinity
+    if (def.capMult) this.capByMult[cm] = key;
     return def;
   },
   value(key) { return this.values[key] === undefined ? 0 : this.values[key]; },
@@ -807,13 +808,15 @@ function VI_TICK(seconds) {
     }
   });
 
-  if (VI_SYSTEM.state.features.village.currentSubfeature === 0) {
-    // 应用各资源产出（gooboo village.js tick：把计算的 diffs 结转为对应货币增益）
-    for (const c in diffs) {
-      VSTORE.dispatch('currency/gain', { feature: 'village', name: c, amount: diffs[c] });
-    }
-    VSTORE.dispatch('upgrade/tickQueue', { key: 'village_building', seconds: seconds * VSTORE.getters['mult/get']('queueSpeedVillageBuilding') });
+  // ↓ 主资源产出 → 不分 subfeature，永远跑（gooboo 原版 tick 行为）
+  for (const c in diffs) {
+    VSTORE.dispatch('currency/gain', { feature: 'village', name: c, amount: diffs[c] });
+  }
 
+  // 建筑队列 tick — gooboo 原版永久跑，不分 subfeature
+  VSTORE.dispatch('upgrade/tickQueue', { key: 'village_building', seconds: seconds * VSTORE.getters['mult/get']('queueSpeedVillageBuilding') });
+
+  if (VI_SYSTEM.state.features.village.currentSubfeature === 0) {
     const happiness = VSTORE.getters['mult/get']('villageHappiness');
     const offeringGain = VSTORE.getters['village/offeringPerSecond'];
     if (offeringGain > 0) {
@@ -925,18 +928,17 @@ function VI_TICK(seconds) {
     else if (value < 0) VSTORE.dispatch('currency/spend', { feature: split[0], name: split[1], amount: -value });
   }
 
-  if (VI_SYSTEM.state.features.village.currentSubfeature === 0) {
-    const taxpayers = VSTORE.getters['mult/get']('villageTaxRate') * VSTORE.getters['village/employed'];
-    if (taxpayers > 0) {
-      VSTORE.getters['currency/list']('village', 'regular', 'food').forEach(foodName => {
-        const food = foodName.split('_')[1];
-        const foodConsumed = Math.min(taxpayers * seconds, VSTORE.getters['currency/value']('village_' + food));
-        if (foodConsumed > 0) {
-          VSTORE.dispatch('currency/spend', { feature: 'village', name: food, amount: foodConsumed });
-          VSTORE.dispatch('currency/gain', { feature: 'village', name: 'coin', gainMult: true, amount: foodConsumed * VILLAGE_COINS_PER_FOOD });
-        }
-      });
-    }
+  // 税收：食物换 coin — gooboo 原版永久跑，不分 subfeature
+  const taxpayers = VSTORE.getters['mult/get']('villageTaxRate') * VSTORE.getters['village/employed'];
+  if (taxpayers > 0) {
+    VSTORE.getters['currency/list']('village', 'regular', 'food').forEach(foodName => {
+      const food = foodName.split('_')[1];
+      const foodConsumed = Math.min(taxpayers * seconds, VSTORE.getters['currency/value']('village_' + food));
+      if (foodConsumed > 0) {
+        VSTORE.dispatch('currency/spend', { feature: 'village', name: food, amount: foodConsumed });
+        VSTORE.dispatch('currency/gain', { feature: 'village', name: 'coin', gainMult: true, amount: foodConsumed * VILLAGE_COINS_PER_FOOD });
+      }
+    });
   }
 }
 

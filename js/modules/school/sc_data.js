@@ -292,8 +292,8 @@ const SC_UPGRADES = {
 const SC_MODULE = {
   name: 'school',
   tickspeed: 1,
-  unlockNeeded: 'schoolFeature',
-  unlock: ['schoolFeature', 'schoolLiteratureSubfeature', 'schoolHistorySubfeature', 'schoolArtSubfeature', 'schoolChemistrySubfeature', 'schoolLibrarySubfeature'],
+  unlockNeeded: 'scFeature',
+  unlock: ['scFeature', 'scLiteratureSubfeature', 'scHistorySubfeature', 'scArtSubfeature', 'scChemistrySubfeature', 'scLibrarySubfeature'],
   stat: {
     highestGrade: { display: 'grade' },
     totalPoints: { display: 'int' }
@@ -334,10 +334,10 @@ const SC_MODULE = {
   init() {
     for (const [key, elem] of Object.entries({
       math: { scoreGoal: 5 },
-      literature: { unlock: 'schoolLiteratureSubfeature', scoreGoal: 8 },
-      history: { unlock: 'schoolHistorySubfeature', scoreGoal: 8 },
-      art: { unlock: 'schoolArtSubfeature', scoreGoal: 10 },
-      chemistry: { unlock: 'schoolChemistrySubfeature', scoreGoal: 100 }
+      literature: { unlock: 'scLiteratureSubfeature', scoreGoal: 8 },
+      history: { unlock: 'scHistorySubfeature', scoreGoal: 8 },
+      art: { unlock: 'scArtSubfeature', scoreGoal: 10 },
+      chemistry: { unlock: 'scChemistrySubfeature', scoreGoal: 100 }
     })) {
       SCTORE.commit('school/initSubject', { name: key, ...elem });
     }

@@ -2,7 +2,7 @@
  * sc_view.js ——「藏经阁（school）」主视图：复刻 gooboo School.vue
  *
  * 布局：
- *   tabs：学科(school) | 藏书阁(library，需 unlock.schoolLibrarySubfeature.see)
+ *   tabs：学科(school) | 藏书阁(library，需 unlock.scLibrarySubfeature.see)
  *   学科页：顶部考签区 + dustMult 新手提示 + multipass 输入 + 五学科卡片
  *   藏书阁页：booksLeft/maxBooks + feature 筛选 + 书籍卡片网格
  *   小游戏：演算(算术)/文墨(打字)/史卷(配对)/绘卷(调色)/丹术(炼金观气)
@@ -207,7 +207,7 @@ var GB_SC_VIEW = {
   cur(k) { return SC_CUR.value(k); },
   curCap(k) { return SC_CUR.cap(k); },
   isVisible(id) { return SC_UNLOCK.isVisible(id); },
-  canSeeLibrary() { return this.isVisible('schoolLibrarySubfeature'); },
+  canSeeLibrary() { return this.isVisible('scLibrarySubfeature'); },
   maxMultipass() { return this.mget('schoolMultipass'); },
 
   /* ---------- 生命周期 ---------- */
@@ -230,7 +230,7 @@ var GB_SC_VIEW = {
     this.stopAllIntervals();
     this.el = null;
   },
-  setTab(t) { this.tab = t; this.render(); },
+  setTab(t) { this.tab = t; this._resetScroll = true; this.render(); },
 
   /* ---------- 事件（事件委托） ---------- */
   onClick(e) {
@@ -246,12 +246,15 @@ var GB_SC_VIEW = {
     if (tag === 'gradeMinus') { this.removeGrade(val); this.save(); this.render(); return; }
     if (tag === 'skip') { SC_RT.act('skipBook', val); this.save(); this.render(); return; }
     if (tag === 'read') { SC_RT.act('readBook', val); this.save(); this.render(); return; }
-    if (tag === 'feat') { this.tab = val; this.render(); return; }
+    if (tag === 'feat') { this._libFeature = val; this.render(); return; }
     if (tag === 'leave') { this.leaveSchool(); return; }
     if (tag === 'mg-answer') { this.mgAnswer(); return; }
     if (tag === 'mg-art') { this.mgArtAnswer(+val); return; }
     if (tag === 'mg-hist') { this.mgHistReveal(+val); return; }
     if (tag === 'mg-chem-submit') { this.mgChemSubmit(); return; }
+    if (tag === 'idiom-cell') { this.mgLitClickCell(val); return; }
+    if (tag === 'idiom-choice') { this.mgLitClickChoice(parseInt(val)); return; }
+    if (tag === 'idiom-next') { this.mgLitNext(); return; }
     if (this.playing) this.mgInlineClick(tag, val);
   },
   /* 小游戏内的内联点击（丢给各 minigame） */
@@ -301,9 +304,9 @@ var GB_SC_VIEW = {
   },
   _settle() {
     try {
-      // schoolFeature 的解锁现在由 GB_UNLOCK + GB_META 全局管理（globalLevel 阈值 25）
+      // scFeature 的解锁现在由 GB_UNLOCK + GB_META 全局管理（globalLevel 阈值 25）
       // 开局已有库功能可看（默认），便于显示藏书阁
-      if (this.state && !this.isVisible('schoolLibrarySubfeature')) SC_UNLOCK.unlock('schoolLibrarySubfeature');
+      if (this.state && !this.isVisible('scLibrarySubfeature')) SC_UNLOCK.unlock('scLibrarySubfeature');
       this.multipass = this.state.multipass || 1;
       this.refreshBindings();
     } catch (e) { /* ignore */ }
@@ -336,6 +339,8 @@ var GB_SC_VIEW = {
     if (!tabs || !content) return;
     const t = this.getTabs();
     if (!t.some(x => x.id === this.tab)) this.tab = t[0].id;
+    const keep = this._resetScroll ? 0 : content.scrollTop;
+    this._resetScroll = false;
     tabs.innerHTML = t.map(x => `<button class="gb-tab ${x.id === this.tab ? 'active' : ''}" data-sact="tab:${x.id}">${this.icon(x.icon, 18)}${x.name}</button>`).join('');
     if (this.playing !== null) {
       // 游戏进行中：检查 playing DOM 是否已初始化
@@ -348,10 +353,12 @@ var GB_SC_VIEW = {
       }
       // DOM 还没初始化（startStudy/startExam 首次渲染），或 forceRebuild=true（minigame 内部需要刷新）
       content.innerHTML = this.renderPlayingLayout();
+      content.scrollTop = keep;
       this.bindPlayingInputs();
       return;
     }
     content.innerHTML = this.tab === 'library' ? this.renderLibrary() : this.renderSchoolPage();
+    content.scrollTop = keep;
   },
   getTabs() {
     const t = [{ id: 'school', name: '学科', icon: 'mdi-school' }];
@@ -696,11 +703,7 @@ var GB_SC_VIEW = {
   bindPlayingInputs() {
     const el = this.el; if (!el) return;
     const name = this.mg.subject;
-    if (name === 'math') {
-      // 算24点使用事件委托，不需要特殊绑定
-    } else if (name === 'literature') {
-      this.bindOne(el, '#mg-lit-input', 'input', () => this.mgLitHandle());
-    }
+    // literature（成语接龙）：全用 data-sact 事件委托，不需要特殊绑定
   },
   bindOne(el, sel, evt, fn) {
     try {
@@ -952,137 +955,157 @@ var GB_SC_VIEW = {
     // 算24点不需要这个入口，操作全由 data-sact 驱动
   },
 
-  /* ---- 文墨（打字）literature ---- */
-  generateSentence(grade) {
-    grade = grade || 0;
-    const wordList = SC_WORDS;
-    let sentence = '';
-    const maxLength = Math.round(Math.pow(grade * 2.75, 1.16) + 8);
-    const lengthWeights = [
-      3,
-      Math.max(Math.min(3, grade + 1), 0),
-      Math.max(Math.min(3, grade - 1), 0),
-      Math.max(Math.min(3, grade - 3), 0),
-      Math.max(Math.min(3, grade - 5), 0),
-      Math.max(Math.min(3, grade - 7), 0) * 0.9,
-      Math.max(Math.min(3, grade - 9), 0) * 0.7,
-      Math.max(Math.min(3, grade - 11), 0) * 0.5,
-      Math.max(Math.min(3, grade - 13), 0) * 0.3
-    ];
-    const delimiterWeights = [20,
-      Math.max(Math.min(3, grade - 2), 0),
-      Math.max(Math.min(3, grade - 6), 0) * 0.6,
-      Math.max(Math.min(3, grade - 8), 0) * 0.5,
-      Math.max(Math.min(3, grade - 10), 0) * 0.35
-    ];
-    const delimiterList = ['', ',', ':', ';', ' -'];
-    const numberModifierWeights = [7,
-      Math.max(Math.min(3, grade - 9), 0),
-      Math.max(Math.min(3, grade - 11), 0),
-      Math.max(Math.min(3, grade - 13), 0)
-    ];
-    const wordCapsWeights = [20,
-      Math.max(Math.min(5, grade - 11), 0),
-      Math.max(Math.min(5, grade - 15), 0) * 0.4
-    ];
-    const wordModifierWeights = [60,
-      Math.max(Math.min(5, grade - 6), 0),
-      Math.max(Math.min(5, grade - 8), 0),
-      Math.max(Math.min(3, grade - 11), 0),
-      Math.max(Math.min(3, grade - 12), 0),
-      Math.max(Math.min(3, grade - 13), 0)
-    ];
-    const numberChance = Math.max(Math.min(10, grade - 4) * 0.01, 0);
-    for (let i = 0; i < 500; i++) {
-      let word = '';
-      const ci = weightSelect(lengthWeights);
-      if (chance(numberChance)) {
-        word = randomInt(Math.pow(10, ci + 1), Math.pow(10, ci + 2) - 1).toString();
-        const cm = weightSelect(numberModifierWeights);
-        if (cm === 1) word = '#' + word; else if (cm === 2) word = '$' + word; else if (cm === 3) word += '%';
-      } else {
-        word = randomElem(wordList[Math.min(ci, wordList.length - 1)]);
-        const cc = weightSelect(wordCapsWeights);
-        if (cc === 1) word = capitalize(word); else if (cc === 2) word = word.toUpperCase();
-        const wm = weightSelect(wordModifierWeights);
-        if (wm === 1) word = '"' + word + '"';
-        else if (wm === 2) word = "'" + word + "'";
-        else if (wm === 3) word = '(' + word + ')';
-        else if (wm === 4) word = '[' + word + ']';
-        else if (wm === 5) word = '{' + word + '}';
-      }
-      sentence += word;
-      if (sentence.length >= (maxLength - 2)) break;
-      else sentence += delimiterList[weightSelect(delimiterWeights)] + ' ';
-    }
-    const scall = ['', '.', '!', '?', '...', '!!!', '???', '!?!', '?!?'];
-    const sw = [3,
-      Math.max(Math.min(10, grade), 0),
-      Math.max(Math.min(5, grade - 4), 0),
-      Math.max(Math.min(5, grade - 6), 0),
-      Math.max(Math.min(5, grade - 8), 0) * 0.8,
-      Math.max(Math.min(5, grade - 10), 0) * 0.7,
-      Math.max(Math.min(5, grade - 10), 0) * 0.7,
-      Math.max(Math.min(5, grade - 12), 0) * 0.4,
-      Math.max(Math.min(5, grade - 12), 0) * 0.4
-    ];
-    sentence += scall[weightSelect(sw)];
-    return sentence;
-  },
+  /* ---- 文墨（成语接龙棋盘）literature ---- */
   mgLitInit() {
-    this.mg.elo = this.subj('literature').currentGrade || 0;
-    this.mg.words = [];
-    this.mg.highestCorrectChars = 0;
-    while (this.mg.words.length < 2) this.mg.words.push(this.generateSentence(this.mg.elo));
+    const elo = this.subj('literature').currentGrade || 0;
+    this.mg.elo = elo;
+    this.mg.layout = null;
+    this.mg.choices = [];
+    this.mg.filled = {};   // { "x,y": '字' } 已填入的空格
+    this.mg.selected = null; // "x,y" 当前选中的空格
+    this.mg.solved = false;
+    this.mgLitNewPuzzle();
   },
-  mgLitCurrentWord() {
-    const word = this.mg.words[0];
-    if (!word) return [];
-    const cur = this.mgLitCurrentAnswer();
-    const arr = [];
-    for (let i = 0; i < word.length; i++) {
-      arr.push({ char: word.charAt(i), status: cur.length > i ? (word.charAt(i) === cur.charAt(i) ? 1 : 2) : 0 });
+  mgLitNewPuzzle() {
+    // chainLen 4~6（难度随等级递增）
+    const chainLen = Math.min(6, Math.max(4, 4 + Math.floor(this.mg.elo / 6)));
+    const chain = (typeof SC_IdiomChain !== 'undefined' ? SC_IdiomChain : () => [
+      '胸有成竹','竹报平安','安富尊荣','荣华富贵','贵而贱目','目无余子','子虚乌有','有目共睹'
+    ])(chainLen);
+    // gridSize 自适应：SC_IdiomLayout 内部根据 chainLen 自动算 + 失败放大
+    const layout = (typeof SC_IdiomLayout !== 'undefined' ? SC_IdiomLayout : (c) => {
+      // 兜底简化布局
+      const cells = [];
+      const sy = 2;
+      for (let i = 0; i < c.length; i++) {
+        const sx = 1;
+        for (let k = 0; k < 4; k++) {
+          cells.push({ x: sx + k, y: sy + i, ch: c[i][k], idiomIdx: i, charIdx: k, bridge: c === 3 && i < c.length - 1, blank: Math.random() < 0.4 });
+        }
+      }
+      return { chain: c, cells, gridSize: Math.max(10, c.length * 2 + 2) };
+    })(chain);
+    // 保底：确保至少有 1 个 blank
+    if (!layout.cells.some(c => c.blank)) {
+      // 随机挖一个
+      const idxs = layout.cells.map((_, i) => i);
+      const pick = idxs[Math.floor(Math.random() * idxs.length)];
+      layout.cells[pick].blank = true;
     }
-    return arr;
-  },
-  mgLitCurrentAnswer() {
-    const a = this.mg.answer || '';
-    return a.slice(0, 1) === ' ' ? a.slice(1) : a;
-  },
-  mgLitCorrectChars() {
-    const word = this.mg.words[0]; if (!word) return 0;
-    const cur = this.mgLitCurrentAnswer();
-    let n = 0;
-    for (let i = 0; i < word.length; i++) {
-      if (word.charAt(i) === cur.charAt(i)) n++; else break;
-    }
-    return n;
+    this.mg.layout = layout;
+    this.mg.choices = (typeof SC_IdiomChoices !== 'undefined' ? SC_IdiomChoices : (l) => {
+      const blanks = l.cells.filter(c => c.blank);
+      const chars = [...new Set(blanks.map(b => b.ch))];
+      const all = (typeof SC_IDIOMS !== 'undefined' ? SC_IDIOMS.join('') : '安富尊荣花言巧语语重心长').split('');
+      const uniq = [...new Set(all)];
+      const pool = chars.slice();
+      while (pool.length < Math.max(5, chars.length + 3)) {
+        const rc = uniq[Math.floor(Math.random() * uniq.length)];
+        if (!pool.includes(rc)) pool.push(rc);
+      }
+      return pool.sort(() => Math.random() - 0.5);
+    })(layout);
+    this.mg.filled = {};
+    this.mg.filledRight = {};
+    this.mg.filledWrong = {};
+    this.mg.selected = null;
+    this.mg.solved = false;
   },
   mgLitRender() {
-    const cur = this.mgLitCurrentWord();
-    const lit = cur.map(l => `<span class="${l.status === 1 ? 'ok' : (l.status === 2 ? 'bad' : '')}">${(l.status === 2 && l.char === ' ') ? '_' : l.char}</span>`).join('');
-    const hints = (this.mg.words || []).slice(1).map(w => `<span class="sc-hint">${w.slice(0, 25)}</span>`).join(' ');
-    return `<div class="sc-mg-lit">${lit}</div>
-      <div class="sc-mg-hints">${hints}</div>
-      <input id="mg-lit-input" class="sc-input sc-lit-input" value="${this.mg.answer || ''}" autofocus />`;
+    const l = this.mg.layout; if (!l) return '';
+    const size = l.gridSize;
+    // 渲染棋盘
+    const cellArr = [];
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const key = x + ',' + y;
+        const cell = l.cells.find(c => c.x === x && c.y === y);
+        if (!cell) { cellArr.push(`<div class="idiom-cell empty"></div>`); continue; }
+        let displayCh = cell.ch;
+        let classes = 'idiom-cell';
+        if (cell.blank) {
+          const filled = this.mg.filled[key];
+          const isRight = this.mg.filledRight && this.mg.filledRight[key];
+          const isWrong = this.mg.filledWrong && this.mg.filledWrong[key];
+          displayCh = filled || '';
+          classes += filled ? (isRight ? ' filled-right' : isWrong ? ' filled-wrong' : ' filled') : ' blank';
+          if (this.mg.selected === key) classes += ' selected';
+        } else {
+          classes += ' fixed';
+        }
+        if (cell.bridge) classes += ' bridge';
+        cellArr.push(`<div class="${classes}" data-sact="idiom-cell:${key}">${displayCh}</div>`);
+      }
+    }
+    const board = `<div class="idiom-board" style="grid-template-columns:repeat(${size}, 1fr)">${cellArr.join('')}</div>`;
+    // 候选字
+    const choicesHtml = this.mg.choices.map((ch, i) =>
+      `<button class="idiom-choice" data-sact="idiom-choice:${i}">${ch}</button>`).join('');
+    const choicesBox = `<div class="idiom-choices">${choicesHtml}</div>`;
+    // 显示接龙成语列表（顶部提示用小字）
+    const chainHtml = l.chain.map((w, i) => `<span class="idiom-chain-item">${w}</span>`).join(' → ');
+    const chainTip = `<div class="idiom-chain-tip">${chainHtml}</div>`;
+    // 下一题按钮
+    const solvedHint = this.mg.solved ? `<div class="idiom-solved">✓ 接龙成功！+1 分</div>` : '';
+    const nextBtn = `<button class="sc-btn" data-sact="idiom-next">${this.mg.solved ? '下一题' : '跳过本题'}</button>`;
+    return `<div class="idiom-wrap">${board}${choicesBox}${solvedHint}${nextBtn}</div>`;
   },
-  mgLitHandle() {
-    const el = this.el; if (!el) return;
-    const input = el.querySelector('#mg-lit-input');
-    if (!input) return;
-    this.mg.answer = input.value;
-    const w0 = this.mg.words[0];
-    if (!w0) return;
-    if (this.mgLitCurrentAnswer() === w0) {
-      this.score++;
-      this.updateScore(this.score);
-      this.mg.answer = '';
-      this.mg.highestCorrectChars = 0;
-      this.mg.words.splice(0, 1);
-      while (this.mg.words.length < 2) this.mg.words.push(this.generateSentence(this.mg.elo));
-    } else if (this.mgLitCorrectChars() > this.mg.highestCorrectChars) {
-      this.mg.highestCorrectChars = this.mgLitCorrectChars();
-      this.updateScore(this.score + (this.mgLitCorrectChars() / w0.length));
+  mgLitClickCell(key) {
+    const l = this.mg.layout; if (!l) return;
+    const cell = l.cells.find(c => c.x + ',' + c.y === key);
+    if (!cell || !cell.blank) return;
+    this.mg.selected = key;
+    this.render(true);
+  },
+  mgLitClickChoice(idx) {
+    const l = this.mg.layout; if (!l) return;
+    if (!this.mg.selected) return;
+    const ch = this.mg.choices[idx];
+    const cell = l.cells.find(c => c.x + ',' + c.y === this.mg.selected);
+    if (!cell) return;
+    const key = this.mg.selected;
+
+    // 即时校验：对/错 立刻有反馈
+    const isRight = ch === cell.ch;
+    if (isRight) {
+      // 对：填入 + 标绿 + 清除选中
+      this.mg.filled[key] = ch;
+      this.mg.filledRight = this.mg.filledRight || {};
+      this.mg.filledRight[key] = true;
+      this.mg.selected = null;
+      // 检查是否全部填对
+      const blanks = l.cells.filter(c => c.blank);
+      const allFilledCorrect = blanks.every(b => this.mg.filledRight[b.x + ',' + b.y]);
+      if (allFilledCorrect) {
+        this.mg.solved = true;
+        this.score++;
+        this.updateScore(this.score);
+      }
+      this.render(true);
+    } else {
+      // 错：短暂标红，然后自动清掉
+      this.mg.filled[key] = ch;
+      this.mg.filledWrong = this.mg.filledWrong || {};
+      this.mg.filledWrong[key] = true;
+      this.mg.selected = null;
+      this.render(true);
+      // 800ms 后自动清掉
+      setTimeout(() => {
+        delete this.mg.filled[key];
+        delete this.mg.filledWrong[key];
+        this.render(true);
+      }, 800);
+    }
+  },
+  mgLitNext() {
+    this.mgLitNewPuzzle();
+    this.render(true);
+  },
+  mgLitClear() {
+    // 清空当前选中的填入
+    if (this.mg.selected && this.mg.filled[this.mg.selected]) {
+      delete this.mg.filled[this.mg.selected];
+      this.render(true);
     }
   },
 

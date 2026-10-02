@@ -51,7 +51,7 @@ src += `
   assert(SC_RT.ready === true, 'SC_BOOT ready');
   assert(!!st.subject.math && !!st.subject.literature && !!st.subject.history && !!st.subject.art && !!st.subject.chemistry, '五学科已初始化');
   assert(st.subject.math.scoreGoal === 14, '演算 scoreGoal=14');
-  assert(st.subject.literature.unlock === 'schoolLiteratureSubfeature', '文墨解锁键存在');
+  assert(st.subject.literature.unlock === 'scLiteratureSubfeature', '文墨解锁键存在');
 
   // 外部宝石货币注册（蓝宝/翡翠/红宝）
   assert(typeof SC_CUR.defs['gem_sapphire'] !== 'undefined', '蓝宝 gem_sapphire 注册');

@@ -72,6 +72,7 @@ var GB_VI_VIEW = {
   },
   setTab(t) {
     this.tab = t;
+    this._resetScroll = true;
     this.render();
   },
   render() {
@@ -81,10 +82,26 @@ var GB_VI_VIEW = {
     const content = el.querySelector('#vi-content');
     if (!tabs || !content) return;
     this.ensureValidTab();
+
+    // --- 保存所有滚动容器位置（外层 + 内层 .scroll-container-tab）---
+    const reset = this._resetScroll;
+    this._resetScroll = false;
+    const saved = reset ? null : {
+      outer: content.scrollTop,
+      innerTabs: Array.from(content.querySelectorAll('.scroll-container-tab')).map(el => el.scrollTop),
+    };
+
     tabs.innerHTML = this.getTabs().map(t =>
       `<button class="gb-tab ${t.id === this.tab ? 'active' : ''}" data-tab="${t.id}" onclick="GB_VI_VIEW.setTab('${t.id}')">${this.icon(t.icon, 18)}${t.name}</button>`
     ).join('');
     content.innerHTML = this.currentTabContent();
+
+    // --- 恢复所有滚动位置 ---
+    if (saved) {
+      content.scrollTop = saved.outer;
+      const newTabs = content.querySelectorAll('.scroll-container-tab');
+      newTabs.forEach((el, i) => { if (saved.innerTabs[i] != null) el.scrollTop = saved.innerTabs[i]; });
+    }
   },
   /* 渐进显示的 Tabs（参考 gooboo Village.vue：供奉/戒律/飞升/工坊 满足条件后才出现） */
   getTabs() {
@@ -389,27 +406,36 @@ var GB_VI_VIEW = {
     return `<div class="feature-title">山门政策</div><div class="gb-card">${rows.join('')}</div>`;
   },
 
-  /* ---------- 建造队列（gooboo UpgradeQueue.vue） ---------- */
+  /* ---------- 建造队列（gooboo UpgradeQueue.vue：图标行 + 统一进度条） ---------- */
   renderQueue() {
     const q = this.state.buildingQueue || [];
+    // 顶部排队项统一 icon + 合并同类
     if (!q.length) return '';
+    const groups = [];
+    for (const id of q) {
+      if (groups.length && groups[groups.length - 1].id === id) groups[groups.length - 1].cnt++;
+      else groups.push({ id, cnt: 1 });
+    }
+    const head = q[0];
+    const headDef = VI_UPG.defs[head];
+    const headLvl = VI_UPG.levels[head] || 0;
+    const headTotal = headDef ? Math.ceil((typeof headDef.timeNeeded === 'function' ? headDef.timeNeeded(headLvl) : (headDef.timeNeeded || 0))) : 0;
     const prog = this.state._qProgress || {};
-    const items = q.map((id, i) => {
-      const key = id.replace(/^village_/, '');
-      const d = VI_UPG.defs[id];
-      const lvl = VI_UPG.levels[id] || 0;
-      const total = (typeof d.timeNeeded === 'function' ? d.timeNeeded(lvl) : (d.timeNeeded || 0));
-      const remain = prog[id] !== undefined ? prog[id] : total;
-      const pct = total > 0 ? Math.max(0, Math.min(100, (1 - remain / total) * 100)) : 0;
-      const isHead = i === 0;
-      const headTag = isHead ? `<span class="gb-chip small" style="background:rgba(126,87,194,.3);color:#c7a7ea;">建造中</span>` : `<span class="dim" style="font-size:11px;">排队</span>`;
-      const timeTag = `<span class="dim" style="font-size:11px;">${this.fmtTime(isHead ? remain : total)}</span>`;
-      const bar = isHead
-        ? `<div class="vi-bar"><div class="vi-bar-fill" style="width:${pct}%"></div><span>${Math.round(pct)}% · ${this.fmtTime(remain)}</span></div>`
-        : '';
-      return `<div class="vi-queue-item">${this.icon('mdi-hammer', 15)}${this.buildName(key)}${headTag}${timeTag}${bar}</div>`;
+    const headRemain = prog[head] !== undefined ? prog[head] : headTotal;
+    const pct = headTotal > 0 ? Math.max(0, Math.min(100, (1 - headRemain / headTotal) * 100)) : 0;
+
+    const icons = groups.map(g => {
+      const d = VI_UPG.defs[g.id];
+      const name = g.id.replace(/^village_/, '');
+      const chip = g.cnt > 1 ? `<span class="gb-chip small" style="background:rgba(30,30,30,.75);position:absolute;bottom:-4px;right:-4px;padding:0 4px;font-size:10px;">${g.cnt}</span>` : '';
+      return `<div class="vi-q-icon" data-tip="${this.buildName(name)}">${this.icon(d.icon || 'mdi-city', 18)}${chip}</div>`;
     }).join('');
-    return `<div class="feature-title">建造队列</div><div class="vi-card" style="padding:10px;"><div class="vi-queue">${items}</div></div>`;
+
+    return `<div class="feature-title">建造队列</div>
+      <div class="vi-card vi-q-card">
+        <div class="vi-q-icons">${icons}</div>
+        <div class="vi-bar"><div class="vi-bar-fill" style="width:${pct}%"></div><span>${Math.round(pct)}% · ${this.fmtTime(headRemain)}</span></div>
+      </div>`;
   },
 
   /* ---------- 建筑（gooboo Upgrade.vue 展开态：标题 + 价格 + 建造钮） ---------- */
@@ -425,6 +451,7 @@ var GB_VI_VIEW = {
       return this.priceSum(a) - this.priceSum(b);
     });
     const q = this.state.buildingQueue || [];
+    const prog = this.state._qProgress || {};
     const cards = ids.slice(0, 40).map(id => {
       const key = id.replace(/^village_/, '');
       const d = VI_UPG.defs[id];
@@ -432,27 +459,48 @@ var GB_VI_VIEW = {
       const cap = VI_UPG.cap(id);
       const maxed = lvl >= cap;
       const queued = q.includes(id);
+      const queuedIdx = q.indexOf(id);
+      const isHead = queued && queuedIdx === 0;
       const afford = VI_UPG.canAfford(id);
       const can = !maxed && !queued && afford;
       const priceTxt = this.priceTxt(id);
       const pricePlain = this.pricePlain(id);
       const capTxt = isFinite(cap) ? `${this.fmt(lvl)} / ${this.fmt(cap)}` : this.fmt(lvl);
       const time = d.timeNeeded ? Math.ceil(this.safe(() => (typeof d.timeNeeded === 'function' ? d.timeNeeded(lvl) : d.timeNeeded), 1)) : null;
+
+      // queued 状态的进度
+      let queuedBar = '', queuedTag = '';
+      if (queued) {
+        const total = time || 0;
+        if (isHead) {
+          const remain = prog[id] !== undefined ? prog[id] : total;
+          const pct = total > 0 ? Math.max(0, Math.min(100, (1 - remain / total) * 100)) : 0;
+          queuedTag = `<span class="gb-chip small" style="background:rgba(126,87,194,.3);color:#c7a7ea;">${this.icon('mdi-hammer', 12)} 建造中 ${this.fmtTime(remain)}</span>`;
+          queuedBar = `<div class="vi-bar"><div class="vi-bar-fill" style="width:${pct}%"></div></div>`;
+        } else {
+          queuedTag = `<span class="gb-chip small dim" style="background:rgba(255,255,255,.06);">排队 · #${queuedIdx + 1}</span>`;
+        }
+      }
+
       return `
-        <div class="vi-card vi-upg" style="${can ? '' : 'opacity:.5;'}">
+        <div class="vi-card vi-upg" style="${!maxed && !queued && !afford ? 'opacity:.5;' : ''}">
           <div class="vi-upg-title">
             ${this.icon(d.icon || 'mdi-city', 17, 'c-accent')}
             <span class="name">${this.buildName(key)}</span>
-            ${d.persistent ? `<span class="upg-lock" data-tip="飞升后保留：该建筑的等级不随飞升重置">${this.icon('mdi-lock', 12)}</span>` : ''}
+            ${d.persistent ? `<span class="upg-lock" data-tip="飞升后保留">${this.icon('mdi-lock', 12)}</span>` : ''}
             <span class="gb-chip">${this.icon('mdi-chevron-double-up', 13)}<span style="margin-left:3px;">${capTxt}</span></span>
-            ${time != null ? `<span class="gb-chip">${this.icon('mdi-timer', 13)}<span style="margin-left:3px;">${this.fmtTime(time)}</span></span>` : ''}
+            ${time != null && !queued ? `<span class="gb-chip">${this.icon('mdi-timer', 13)}<span style="margin-left:3px;">${this.fmtTime(time)}</span></span>` : ''}
+            ${queuedTag}
           </div>
+          ${queuedBar}
           <div class="vi-upg-body">
-            <div class="vi-price">${priceTxt}</div>
+            <div class="vi-price">${queued ? '<span class="dim" style="font-size:11px;">价格已在入队时扣除</span>' : priceTxt}</div>
             <div class="vi-upg-actions">
               <div class="spacer"></div>
-              <button class="gb-vbtn primary small ${!can ? 'disabled' : ''}" data-act="bstart:${key}" ${can ? '' : 'disabled'}
-                data-tip="${this.buildName(key)}：花费 ${pricePlain}，耗时 ${time != null ? this.fmtTime(time) : '—'}。">建</button>
+              ${queued
+                ? `<button class="gb-vbtn primary small disabled" disabled>${this.icon('mdi-clock-outline', 13)} ${isHead ? '建造中' : '排队'}</button>`
+                : `<button class="gb-vbtn primary small ${!can ? 'disabled' : ''}" data-act="bstart:${key}" ${can ? '' : 'disabled'}
+                    data-tip="${this.buildName(key)}：花费 ${pricePlain}，耗时 ${time != null ? this.fmtTime(time) : '—'}。">建</button>`}
             </div>
           </div>
         </div>`;

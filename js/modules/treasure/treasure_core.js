@@ -28,6 +28,55 @@
 const XQ_TICK_SPEED = 86400; // 每天 tick 一次
 const TREASURE_PRESTIGE_MAX = 3; // 至仙器效果最多叠加层数（gooboo 常量）
 
+// ======= gooboo 原始常量（经济系统核心） =======
+const TREASURE_TIER_UPGRADE_MULT = 5;
+const TREASURE_TIER_DESTROY_MULT = 4;
+const TREASURE_FRAGMENT_BUY_COST = 100;       // 花 100 青元 → 换灵玉
+const TREASURE_FRAGMENT_BUY_GAIN = 1.1;
+
+/* 各 tier 在随机生成时的出现概率（模拟 gooboo globalLevel 200+ 的分布，
+   用于 averageFragments / fragmentGain 公式计算） */
+const XQ_TIER_CHANCES = [
+  { tier: 1, chance: 0.45 },
+  { tier: 2, chance: 0.30 },
+  { tier: 3, chance: 0.15 },
+  { tier: 4, chance: 0.07 },
+  { tier: 5, chance: 0.03 },
+];
+
+/* tier 对应的炼制青元成本（gooboo: (getSequence(1, tier+1) + 4) * 3） */
+function xqTierPrice(tier) {
+  let seq = 0;
+  for (let i = 1; i <= tier + 1; i++) seq += i;
+  return (seq + 4) * 3;
+}
+/* 期望青元成本 = Σ tierChance × tierPrice(tier) × type.buyPrice */
+function xqTreasurePrice(type) {
+  const t = XQ_TYPES[type]; if (!t) return 0;
+  return XQ_TIER_CHANCES.reduce((a, b) => a + b.chance * xqTierPrice(b.tier), 0) * t.buyPrice;
+}
+/* 销毁返还灵玉 = 4^tier × type.destroyPrice（gooboo destroyFragments） */
+function xqDestroyFragments(tier, type) {
+  const t = XQ_TYPES[type]; if (!t) return 0;
+  return Math.round(Math.pow(TREASURE_TIER_DESTROY_MULT, tier) * t.destroyPrice);
+}
+/* 升级消耗灵玉 = 5^tier × upgradeScaling^max(0, level-upgradeLimit) × upgradePrice */
+function xqUpgradeFragments(tier, level, type) {
+  const t = XQ_TYPES[type]; if (!t) return null;
+  if (t.upgradePrice === null || (level >= t.upgradeLimit && t.upgradeScaling === null)) return null;
+  return Math.round(Math.pow(TREASURE_TIER_UPGRADE_MULT, tier)
+    * Math.pow(t.upgradeScaling, Math.max(0, level - t.upgradeLimit))
+    * t.upgradePrice);
+}
+/* 平均销毁返还灵玉 = Σ tierChance × destroyFragments(tier, regular) */
+function xqAverageFragments() {
+  return XQ_TIER_CHANCES.reduce((a, b) => a + b.chance * xqDestroyFragments(b.tier, 'regular'), 0);
+}
+/* 100 青元能换多少灵玉 = round(avgFrag × 1.1 × 100 / treasurePrice('regular')) */
+function xqFragmentGain() {
+  return Math.round(xqAverageFragments() * TREASURE_FRAGMENT_BUY_GAIN * TREASURE_FRAGMENT_BUY_COST / xqTreasurePrice('regular'));
+}
+
 // ======= 3 种仙器类型 =======
 const XQ_TYPES = {
   regular: {
@@ -66,48 +115,48 @@ const XQ_CURDATA = {
 // ======= 完整 effect 字典（照抄 gooboo src/js/modules/treasure/effect.js） =======
 const XQ_EFFECTS = {
   // ---- Mining（灵脉） ----
-  miningDamage: {              feature: 'mining', icon: 'mdi-bomb', value: 0.5 },
-  currencyMiningScrapGain: {   feature: 'mining', icon: 'mdi-dots-triangle', value: 0.65 },
-  miningOreGain: {             feature: 'mining', icon: 'mdi-chart-bubble', value: 0.2 },
-  miningRareEarthGain: {       feature: 'mining', icon: 'mdi-landslide', value: 0.2 },
-  miningSmelteryTime: {        feature: 'mining', unlock: 'miningSmeltery', icon: 'mdi-thermometer', minTier: 1, value: 0.35, scaling: 'divisive' },
-  currencyMiningCrystalGreenGain: { feature: 'mining', type: 'prestige', icon: 'mdi-star-three-points', max: TREASURE_PRESTIGE_MAX, minTier: 1, value: 0.1 },
-  currencyMiningCrystalYellowGain:  { feature: 'mining', unlock: 'lmGasSubfeature', type: 'prestige', icon: 'mdi-star-four-points', max: TREASURE_PRESTIGE_MAX, minTier: 2, value: 0.1 },
+  miningDamage: {              feature: 'mining', icon: 'mdi-bomb', value: 0.5, desc: '挖矿攻击伤害提升' },
+  currencyMiningScrapGain: {   feature: 'mining', icon: 'mdi-dots-triangle', value: 0.65, desc: '碎灵石掉落数量增加' },
+  miningOreGain: {             feature: 'mining', icon: 'mdi-chart-bubble', value: 0.2, desc: '矿石采集产出提升' },
+  miningRareEarthGain: {       feature: 'mining', icon: 'mdi-landslide', value: 0.2, desc: '稀土矿采集产出提升' },
+  miningSmelteryTime: {        feature: 'mining', unlock: 'miningSmeltery', icon: 'mdi-thermometer', minTier: 1, value: 0.35, scaling: 'divisive', desc: '炼器炉炼制时间缩短' },
+  currencyMiningCrystalGreenGain: { feature: 'mining', type: 'prestige', icon: 'mdi-star-three-points', max: TREASURE_PRESTIGE_MAX, minTier: 1, value: 0.1, desc: '绿色灵晶产出（至仙器专属）' },
+  currencyMiningCrystalYellowGain:  { feature: 'mining', unlock: 'lmGasSubfeature', type: 'prestige', icon: 'mdi-star-four-points', max: TREASURE_PRESTIGE_MAX, minTier: 2, value: 0.1, desc: '黄色灵晶产出（至仙器专属）' },
 
   // ---- Village（宗门） ----
-  queueSpeedVillageBuilding: { feature: 'village', icon: 'mdi-hammer', value: 0.4 },
-  currencyVillageCoinGain: {    feature: 'village', icon: 'mdi-circle-multiple', value: 0.5 },
-  villageFoundationMaterialGain: { feature: 'village', icon: 'mdi-tree', value: 0.2 },
-  villageIndustrialMaterialGain: { feature: 'village', unlock: 'villageBuildings2', icon: 'mdi-mirror', value: 0.2 },
-  villageLuxuryMaterialGain:     { feature: 'village', unlock: 'villageBuildings4', icon: 'mdi-diamond', minTier: 1, value: 0.2 },
-  villageModernMaterialGain:     { feature: 'village', unlock: 'villageBuildings7', icon: 'mdi-oil', minTier: 2, value: 0.2 },
-  currencyVillageFaithGain:      { feature: 'village', type: 'prestige', icon: 'mdi-hands-pray', max: TREASURE_PRESTIGE_MAX, minTier: 1, value: 0.1 },
-  currencyVillageSharesGain:     { feature: 'village', unlock: 'villCraftingSubfeature', type: 'prestige', icon: 'mdi-certificate', max: TREASURE_PRESTIGE_MAX, minTier: 2, value: 0.1 },
+  queueSpeedVillageBuilding: { feature: 'village', icon: 'mdi-hammer', value: 0.4, desc: '宗门屋舍建造速度提升' },
+  currencyVillageCoinGain: {    feature: 'village', icon: 'mdi-circle-multiple', value: 0.5, desc: '香火钱产出提升' },
+  villageFoundationMaterialGain: { feature: 'village', icon: 'mdi-tree', value: 0.2, desc: '基础建材（木材等）产出提升' },
+  villageIndustrialMaterialGain: { feature: 'village', unlock: 'villageBuildings2', icon: 'mdi-mirror', value: 0.2, desc: '工业建材产出提升' },
+  villageLuxuryMaterialGain:     { feature: 'village', unlock: 'villageBuildings4', icon: 'mdi-diamond', minTier: 1, value: 0.2, desc: '高阶建材产出提升' },
+  villageModernMaterialGain:     { feature: 'village', unlock: 'villageBuildings7', icon: 'mdi-oil', minTier: 2, value: 0.2, desc: '尖端建材产出提升' },
+  currencyVillageFaithGain:      { feature: 'village', type: 'prestige', icon: 'mdi-hands-pray', max: TREASURE_PRESTIGE_MAX, minTier: 1, value: 0.1, desc: '信仰产出（至仙器专属）' },
+  currencyVillageSharesGain:     { feature: 'village', unlock: 'villCraftingSubfeature', type: 'prestige', icon: 'mdi-certificate', max: TREASURE_PRESTIGE_MAX, minTier: 2, value: 0.1, desc: '宗门分红收益（至仙器专属）' },
 
   // ---- Horde（降妖） ----
-  hordeAttack: {                  feature: 'horde', icon: 'mdi-sword', value: 0.35 },
-  currencyHordeBoneGain: {        feature: 'horde', icon: 'mdi-bone', value: 0.6 },
-  currencyHordeCorruptedFleshGain: { feature: 'horde', unlock: 'hordeCorruptedFlesh', icon: 'mdi-food-steak', value: 0.15 },
-  hordeEquipmentMasteryGain: {    feature: 'horde', unlock: 'hordeEquipmentMastery', icon: 'mdi-seal', minTier: 1, value: 0.2 },
-  hordeShardChance: {             feature: 'horde', unlock: 'hordeBrickTower', icon: 'mdi-billiards-rack', minTier: 2, value: 0.15 },
-  currencyHordeBloodGain: {       feature: 'horde', unlock: 'hoClassesSubfeature', icon: 'mdi-iv-bag', minTier: 3, value: 0.6 },
-  currencyHordeSoulCorruptedGain: { feature: 'horde', type: 'prestige', icon: 'mdi-ghost', max: TREASURE_PRESTIGE_MAX, minTier: 1, value: 0.1 },
-  currencyHordeCourageGain: {     feature: 'horde', unlock: 'hoClassesSubfeature', type: 'prestige', icon: 'mdi-ghost', max: TREASURE_PRESTIGE_MAX, minTier: 3, value: 0.1 },
+  hordeAttack: {                  feature: 'horde', icon: 'mdi-sword', value: 0.35, desc: '降妖战斗攻击伤害提升' },
+  currencyHordeBoneGain: {        feature: 'horde', icon: 'mdi-bone', value: 0.6, desc: '击杀妖物获得妖骨数量增加' },
+  currencyHordeCorruptedFleshGain: { feature: 'horde', unlock: 'hordeCorruptedFlesh', icon: 'mdi-food-steak', value: 0.15, desc: '击杀妖物获得魔肉数量增加' },
+  hordeEquipmentMasteryGain: {    feature: 'horde', unlock: 'hordeEquipmentMastery', icon: 'mdi-seal', minTier: 1, value: 0.2, desc: '装备熟练度获取加速' },
+  hordeShardChance: {             feature: 'horde', unlock: 'hordeBrickTower', icon: 'mdi-billiards-rack', minTier: 2, value: 0.15, desc: '爬塔时获得法宝碎片的几率提升' },
+  currencyHordeBloodGain: {       feature: 'horde', unlock: 'hoClassesSubfeature', icon: 'mdi-iv-bag', minTier: 3, value: 0.6, desc: '击杀妖物获得妖血数量增加' },
+  currencyHordeSoulCorruptedGain: { feature: 'horde', type: 'prestige', icon: 'mdi-ghost', max: TREASURE_PRESTIGE_MAX, minTier: 1, value: 0.1, desc: '魂核产出（至仙器专属）' },
+  currencyHordeCourageGain: {     feature: 'horde', unlock: 'hoClassesSubfeature', type: 'prestige', icon: 'mdi-ghost', max: TREASURE_PRESTIGE_MAX, minTier: 3, value: 0.1, desc: '勇气产出（至仙器专属）' },
 
   // ---- Farm（灵植园） ----
-  currencyFarmVegetableGain: { feature: 'farm', icon: 'mdi-carrot', value: 0.55 },
-  currencyFarmBerryGain: {     feature: 'farm', icon: 'mdi-fruit-grapes', value: 0.55 },
-  currencyFarmGrainGain: {     feature: 'farm', icon: 'mdi-barley', value: 0.55 },
-  currencyFarmFlowerGain: {    feature: 'farm', icon: 'mdi-flower', value: 0.55 },
-  farmExperience: {             feature: 'farm', unlock: 'farmCropExp', type: 'prestige', icon: 'mdi-star', max: TREASURE_PRESTIGE_MAX, minTier: 1, value: 0.1 },
+  currencyFarmVegetableGain: { feature: 'farm', icon: 'mdi-carrot', value: 0.55, desc: '灵菜收获数量提升' },
+  currencyFarmBerryGain: {     feature: 'farm', icon: 'mdi-fruit-grapes', value: 0.55, desc: '灵果收获数量提升' },
+  currencyFarmGrainGain: {     feature: 'farm', icon: 'mdi-barley', value: 0.55, desc: '灵谷收获数量提升' },
+  currencyFarmFlowerGain: {    feature: 'farm', icon: 'mdi-flower', value: 0.55, desc: '灵花收获数量提升' },
+  farmExperience: {             feature: 'farm', unlock: 'farmCropExp', type: 'prestige', icon: 'mdi-star', max: TREASURE_PRESTIGE_MAX, minTier: 1, value: 0.1, desc: '灵植经验加速（至仙器专属）' },
 
   // ---- School / Gallery（藏经阁 / 画阁） ----
-  currencyGalleryBeautyGain: { feature: 'gallery', icon: 'mdi-image-filter-vintage', minTier: 1, value: 0.75 },
-  galleryColorGain: {          feature: 'gallery', icon: 'mdi-liquid-spot', minTier: 1, value: 0.1 },
-  currencyGalleryConverterGain:{ feature: 'gallery', unlock: 'galleryConversion', icon: 'mdi-recycle', minTier: 1, value: 0.5 },
-  galleryShapeGain: {          feature: 'gallery', unlock: 'galleryShape', icon: 'mdi-shape', minTier: 1, value: 0.65 },
-  galleryCanvasSpeed: {        feature: 'gallery', unlock: 'galleryCanvas', icon: 'mdi-artboard', minTier: 2, value: 0.15 },
-  currencyGalleryCashGain: {   feature: 'gallery', type: 'prestige', icon: 'mdi-cash', max: TREASURE_PRESTIGE_MAX, minTier: 1, value: 0.1 },
+  currencyGalleryBeautyGain: { feature: 'gallery', icon: 'mdi-image-filter-vintage', minTier: 1, value: 0.75, desc: '灵韵产出提升' },
+  galleryColorGain: {          feature: 'gallery', icon: 'mdi-liquid-spot', minTier: 1, value: 0.1, desc: '灵色每刻产量提升' },
+  currencyGalleryConverterGain:{ feature: 'gallery', unlock: 'galleryConversion', icon: 'mdi-recycle', minTier: 1, value: 0.5, desc: '灵墨转换产出提升' },
+  galleryShapeGain: {          feature: 'gallery', unlock: 'galleryShape', icon: 'mdi-shape', minTier: 1, value: 0.65, desc: '形态每刻产量提升' },
+  galleryCanvasSpeed: {        feature: 'gallery', unlock: 'galleryCanvas', icon: 'mdi-artboard', minTier: 2, value: 0.15, desc: '绘制灵画速度加快' },
+  currencyGalleryCashGain: {   feature: 'gallery', type: 'prestige', icon: 'mdi-cash', max: TREASURE_PRESTIGE_MAX, minTier: 1, value: 0.1, desc: '灵石产出（至仙器专属）' },
 };
 
 // ======= 工具函数 =======
@@ -163,6 +212,7 @@ function makeItem(type, tier) {
     type, tier, level: 0, days: 0,
     modifier: [],
     effect: t.slots.map(() => null),
+    fragmentsSpent: 0, // 累计花在这件仙器上的灵玉（销毁时全额返还）
   };
 }
 
@@ -325,10 +375,14 @@ const XQ_MODULE = {
   },
 
   // ======= 仙器 API =======
+
+  /* 炼制仙器 —— 花 dao_qingyuan（青元），不花灵玉。完全对齐 gooboo buy() */
   buy(type, tier) {
     const t = XQ_TYPES[type]; if (!t) return null;
-    const price = Math.ceil(t.buyPrice * Math.pow(1.6, tier));
-    if (!XQ_CUR.spend('xq_fragment', price)) return null;
+    const emeraldCost = Math.round(xqTierPrice(tier) * t.buyPrice);
+    // 对接到 DAO_CUR（大道法则模块的青元 = gooboo emerald）
+    if (typeof DAO_CUR === 'undefined') return null;
+    if (!DAO_CUR.spend('dao_qingyuan', emeraldCost)) return null;
     return makeItem(type, tier);
   },
 
@@ -337,6 +391,21 @@ const XQ_MODULE = {
     XQ_STATE.newItem = item;
     return true;
   },
+
+  /* 用青元换灵玉 —— 对齐 gooboo buyFragments()。花 100 青元 → 得 fragmentGain 灵玉 */
+  buyFragments() {
+    if (typeof DAO_CUR === 'undefined') return false;
+    const gain = xqFragmentGain();
+    if (DAO_CUR.spend('dao_qingyuan', TREASURE_FRAGMENT_BUY_COST)) {
+      XQ_CUR.add('xq_fragment', gain);
+      return gain;
+    }
+    return false;
+  },
+
+  /* 查询青元换灵玉的数量（给 view 展示用） */
+  fragmentGainPreview() { return xqFragmentGain(); },
+  fragmentBuyCost() { return TREASURE_FRAGMENT_BUY_COST; },
 
   equip() {
     if (!XQ_STATE.newItem) return false;
@@ -356,6 +425,49 @@ const XQ_MODULE = {
     return true;
   },
 
+  // ======= 仙器进阶 API =======
+
+  /* 升级消耗灵玉 —— 完全对齐 gooboo upgradeFragments() */
+  upgradeCost(item) {
+    if (!item || !XQ_TYPES[item.type]) return Infinity;
+    if (item.level >= XQ_TYPES[item.type].upgradeLimit) return Infinity;
+    return xqUpgradeFragments(item.tier, item.level, item.type);
+  },
+  upgrade(itemIndex) {
+    const item = XQ_STATE.items[itemIndex];
+    if (!item) return false;
+    const cost = XQ_MODULE.upgradeCost(item);
+    if (!XQ_CUR.spend('xq_fragment', cost)) return false;
+    item.level += 1;
+    item.fragmentsSpent = (item.fragmentsSpent || 0) + cost; // 累计花的灵玉（销毁时全额返还）
+    item.days = Math.max(item.days, item.level * 5);
+    XQ_MODULE.updateEffectCache();
+    XQ_MODULE.STAT.values.xq_maxLevel.value = Math.max(XQ_MODULE.STAT.values.xq_maxLevel.value || 0, item.level);
+    return true;
+  },
+
+  /* 销毁返还灵玉 —— 完全对齐 gooboo destroyItem()：fragmentsSpent + 4^tier × destroyPrice */
+  destroyPrice(item) {
+    if (!item || !XQ_TYPES[item.type]) return 0;
+    const spent = item.fragmentsSpent || 0;
+    return spent + xqDestroyFragments(item.tier, item.type);
+  },
+  destroy(itemIndex) {
+    const item = XQ_STATE.items[itemIndex];
+    if (!item) return false;
+    const refund = XQ_MODULE.destroyPrice(item);
+    XQ_STATE.items.splice(itemIndex, 1);
+    if (refund > 0) XQ_CUR.add('xq_fragment', refund);
+    XQ_MODULE.updateEffectCache();
+    return refund;
+  },
+
+  /* 炼制青元成本（给 view 展示用） */
+  forgeEmeraldCost(type, tier) {
+    const t = XQ_TYPES[type]; if (!t) return Infinity;
+    return Math.round(xqTierPrice(tier) * t.buyPrice);
+  },
+
   // ======= 存档钩子 =======
   snapshot() {
     return {
@@ -363,19 +475,23 @@ const XQ_MODULE = {
         type: it.type, tier: it.tier, level: it.level, days: it.days,
         modifier: it.modifier ? it.modifier.slice() : [],
         effect: it.effect ? it.effect.slice() : it.effect,
+        fragmentsSpent: it.fragmentsSpent || 0,
       } : null),
       newItem: XQ_STATE.newItem ? {
         type: XQ_STATE.newItem.type, tier: XQ_STATE.newItem.tier,
         level: XQ_STATE.newItem.level, days: XQ_STATE.newItem.days,
         modifier: XQ_STATE.newItem.modifier ? XQ_STATE.newItem.modifier.slice() : [],
         effect: XQ_STATE.newItem.effect ? XQ_STATE.newItem.effect.slice() : XQ_STATE.newItem.effect,
+        fragmentsSpent: XQ_STATE.newItem.fragmentsSpent || 0,
       } : null,
+      curVals: JSON.parse(JSON.stringify(XQ_CUR.values)),
     };
   },
   restore(data) {
     if (!data) return;
     if (data.items) XQ_STATE.items = data.items.map(it => it ? Object.assign(makeItem(it.type, it.tier), it) : null);
     if (data.newItem) XQ_STATE.newItem = Object.assign(makeItem(data.newItem.type, data.newItem.tier), data.newItem);
+    if (data.curVals) Object.keys(data.curVals).forEach(k => { XQ_CUR.values[k] = data.curVals[k]; });
     // 读档后立即刷新 effect cache
     XQ_MODULE.updateEffectCache();
   },
@@ -383,7 +499,6 @@ const XQ_MODULE = {
     XQ_STATE.items = [];
     XQ_STATE.newItem = null;
     XQ_STATE.effectCache = {};
-    // 清掉所有 effect 对应的 mult
     for (const key in XQ_EFFECTS) {
       GB_MODULES.multRemoveKey({ feature: XQ_EFFECTS[key].feature, name: effectKeyToModuleKey(key) });
     }
@@ -391,8 +506,11 @@ const XQ_MODULE = {
     XQ_MODULE.STAT.values.xq_totalDays.value = 0;
     XQ_MODULE.STAT.values.xq_maxLevel.value = 0;
     XQ_MODULE.STAT.values.xq_itemsCount.value = 0;
+    // 灵玉归零（gooboo 不发初始灵玉，全靠青元兑换 + 销毁返还）
   },
-  onAfterLoad() {},
+  onAfterLoad() {
+    // gooboo 没有初始灵玉赠送 —— 灵玉 = 0 起步，靠青元兑换获取
+  },
 };
 
 // ======= 派生 multiplier =======
@@ -404,12 +522,15 @@ if (typeof GB_MODULES !== 'undefined') {
     id: 'treasure', name: '仙器', keyPrefix: 'xq', tickSpeed: XQ_TICK_SPEED,
     unlockNeeded: 'xianqiFeature',
     core: XQ_MODULE,
+    onAfterLoad: () => XQ_MODULE.onAfterLoad && XQ_MODULE.onAfterLoad(),
   });
 }
 
 if (typeof window !== 'undefined') {
   window.XQ_MODULE = XQ_MODULE;
   window.XQ_CUR = XQ_CUR;
+  window.XQ_MULT = XQ_MULT;
+  window.XQ_STATE = XQ_STATE;
   window.XQ_TYPES = XQ_TYPES;
   window.XQ_EFFECTS = XQ_EFFECTS;
   window.XQ_MODIFIERS = XQ_MODIFIERS;

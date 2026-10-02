@@ -1,0 +1,320 @@
+/* ============================================================
+ * gen.css —— 仙尊指引（general）模块专属样式
+ * 复用 base.css 的主题变量，适配 theme-dark / theme-light
+ * 布局按 375×667 竖屏设计。
+ * ============================================================ */
+
+/* ---------- 顶部资源栏 ---------- */
+.gen-header {
+  position: sticky; top: 0; z-index: 4;
+  padding: 8px 12px;
+  background: var(--appbar-bg);
+  border-bottom: 1px solid var(--divider);
+}
+.gen-header-inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.gen-currency {
+  display: flex; align-items: center; gap: 6px;
+}
+.gen-cur-icon { display: flex; }
+.gen-cur-name {
+  font-size: 11px; color: var(--text-dim);
+}
+.gen-cur-val {
+  font-size: 16px; font-weight: 600;
+  color: var(--text-main); font-variant-numeric: tabular-nums;
+}
+.gen-stats {
+  display: flex; gap: 10px;
+}
+.gen-stat {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; color: var(--text-dim);
+  padding: 2px 6px; border-radius: 10px;
+  background: var(--surface-subtle);
+}
+.gen-stat-icon { display: flex; opacity: 0.8; }
+
+/* ---------- 仙尊卡片网格 ---------- */
+.gen-grid {
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+/* ---------- 仙尊卡片 ---------- */
+.gen-card {
+  border: 1px solid var(--card-border-thin);
+  border-radius: 12px;
+  background: var(--surface-tile-solid);
+  overflow: hidden;
+  transition: border-color .2s;
+}
+.gen-card.locked {
+  opacity: 0.6;
+  background: var(--surface-subtle);
+}
+.gen-card-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+}
+.gen-card-head:hover {
+  background: var(--surface-subtle);
+}
+.gen-card.locked .gen-card-head {
+  cursor: default !important;
+}
+.gen-avatar {
+  width: 44px; height: 44px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(250,204,21,0.15), rgba(250,204,21,0.05));
+  border: 1px solid rgba(250,204,21,0.25);
+  color: #facc15;
+}
+.gen-card.locked .gen-avatar {
+  background: var(--surface-subtle);
+  border-color: var(--divider);
+  color: var(--text-dim);
+}
+.gen-info { flex: 1; min-width: 0; }
+.gen-name {
+  font-size: 15px; font-weight: 600;
+  color: var(--text-main);
+}
+.gen-sub {
+  font-size: 11px; color: var(--text-dim);
+  margin-top: 2px;
+}
+.gen-lock-hint {
+  font-size: 11px; color: var(--text-dim);
+  margin-top: 2px; font-style: italic;
+}
+.gen-arrow {
+  display: flex; color: var(--text-dim);
+  transition: transform .2s;
+}
+
+/* ---------- 展开的卡片内容 ---------- */
+.gen-card-body {
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--divider);
+}
+
+/* ---------- 任务线 ---------- */
+.gen-quest {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--divider);
+}
+.gen-quest.completed {
+  border-color: rgba(74,222,128,0.3);
+  background: rgba(74,222,128,0.08);
+}
+.gen-quest-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 6px;
+}
+.gen-quest-name {
+  font-size: 13px; font-weight: 600;
+  color: var(--text-main);
+}
+.gen-quest-progress {
+  font-size: 11px; color: var(--text-dim);
+}
+
+/* ---------- 进度条 ---------- */
+.gen-progress-bar {
+  height: 4px; border-radius: 2px;
+  background: var(--divider);
+  overflow: hidden;
+}
+.gen-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 2px;
+  transition: width .3s ease;
+}
+.gen-quest.completed .gen-progress-fill {
+  background: #4ade80;
+}
+
+/* ---------- 阶段信息 ---------- */
+.gen-stage-info {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--surface-tile-solid);
+}
+.gen-stage-label {
+  font-size: 11px; font-weight: 600;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.gen-reward {
+  margin-top: 8px;
+  font-size: 11px; color: var(--text-dim);
+  display: flex; align-items: center; gap: 4px;
+  padding-top: 6px; border-top: 1px dashed var(--divider);
+}
+.gen-done {
+  text-align: center;
+  padding: 10px;
+  background: transparent;
+}
+.gen-done-label {
+  font-size: 12px; color: #4ade80;
+  font-weight: 500;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+
+/* ---------- 任务项 ---------- */
+.gen-tasks {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.gen-task {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--surface-subtle);
+  font-size: 11.5px;
+  transition: background .15s;
+}
+.gen-task.done {
+  background: rgba(74,222,128,0.1);
+}
+.gen-task-left {
+  display: flex; align-items: center; gap: 6px;
+  flex: 1; min-width: 0;
+}
+.gen-task-status {
+  display: flex; flex-shrink: 0;
+  color: var(--text-dim);
+}
+.gen-task.done .gen-task-status {
+  color: #4ade80;
+}
+.gen-task-desc {
+  color: var(--text-main);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gen-task-right {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  flex-shrink: 0; max-width: 100px;
+}
+.gen-task-val {
+  font-size: 11px; color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.gen-task-mini-bar {
+  width: 100%; max-width: 80px;
+  height: 3px; border-radius: 1.5px;
+  background: var(--divider);
+  overflow: hidden;
+}
+.gen-task-mini-fill {
+  height: 100%;
+  background: #6366f1;
+  border-radius: 1.5px;
+  transition: width .3s ease;
+}
+.gen-task.done .gen-task-mini-fill {
+  background: #4ade80;
+}
+
+/* 布尔型任务（解锁条件） */
+.gen-task-bool.yes {
+  color: #4ade80; font-weight: 500;
+}
+.gen-task-bool.no {
+  color: var(--text-dim);
+}
+
+/* ======= 任务链链式解锁提示 ======= */
+.gen-chain-hint {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgba(99, 102, 241, 0.12);
+  border-left: 3px solid #6366f1;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #a5b4fc;
+  display: flex; align-items: center; gap: 6px;
+}
+.gen-chain-final {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.15), rgba(249, 115, 22, 0.15));
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #facc15;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  text-shadow: 0 0 8px rgba(250, 204, 21, 0.3);
+}
+.gen-locked-quests-hint {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px dashed rgba(148, 163, 184, 0.3);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+
+/* ======= 顶部多货币栏 ======= */
+.gen-currencies-row {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  align-items: center;
+}
+.gen-cur-hint {
+  font-size: 11px; color: var(--text-dim);
+  font-style: italic;
+}
+.gen-currency {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.gen-cur-icon { flex-shrink: 0; }
+.gen-cur-name { color: var(--text-dim); }
+.gen-cur-val { color: var(--text-main); font-variant-numeric: tabular-nums; font-weight: 500; }
+
+/* ======= 仙尊 lore（入场白） ======= */
+.gen-lore {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.08), rgba(99, 102, 241, 0.08));
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  border-radius: 8px;
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12px;
+  font-style: italic;
+  color: #fcd34d;
+  line-height: 1.6;
+  position: relative;
+}
+.gen-lore span { flex: 1; }
+.gen-lore .mdi-quote-open {
+  flex-shrink: 0;
+  margin-top: 3px;
+  opacity: 0.6;
+}
+
+/* ======= quest story（任务线故事） ======= */
+.gen-quest-story {
+  margin: 4px 0 8px 0;
+  padding: 0 0 8px 12px;
+  border-left: 2px solid rgba(148, 163, 184, 0.2);
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+  line-height: 1.5;
+}

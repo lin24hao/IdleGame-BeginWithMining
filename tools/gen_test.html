@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>仙尊指引模块单元测试</title>
+  <style>
+    body { font-family: Consolas, monospace; background: #0f1017; color: #e0e0e0; padding: 20px; }
+    h1 { color: #facc15; font-size: 18px; }
+    h2 { color: #60a5fa; font-size: 14px; margin-top: 18px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+    .ok { color: #4ade80; }
+    .fail { color: #f87171; }
+    .log { font-size: 12px; line-height: 1.8; }
+    .summary { margin-top: 20px; padding: 12px; border-radius: 8px; font-weight: bold; }
+    .summary.pass { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .summary.fail { background: rgba(248,113,113,0.15); color: #f87171; }
+    pre { background: #1a1a2e; padding: 12px; border-radius: 6px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>🔬 仙尊指引（General）模块单元测试</h1>
+  <pre id="output">加载中...</pre>
+
+  <!-- 依赖脚本（严格顺序） -->
+  <script src="../js/icon.js"></script>
+  <script src="../js/gb_registry.js"></script>
+  <script src="../js/global_unlock.js"></script>
+  <script src="../js/meta.js"></script>
+  <script src="../js/modules/general/general_core.js"></script>
+  <script src="../js/views/general_view.js"></script>
+
+  <script>
+  (function(){
+    const out = document.getElementById('output');
+    const lines = [];
+    const log = (...m) => { lines.push(m.join(' ')); console.log(...m); };
+    let pass = 0, fail = 0;
+    const assert = (cond, msg) => {
+      if (cond) { lines.push('  ✓ ' + msg); pass++; }
+      else { lines.push('  ✗ FAIL: ' + msg); fail++; }
+      return cond;
+    };
+    const section = (title) => { lines.push('\n' + '='.repeat(50)); lines.push('  ' + title); lines.push('='.repeat(50)); };
+
+    // 初始化全局 Feature 解锁
+    GB_META.initAllFeatureKeys();
+
+    // ============ 1. Boot ============
+    section('1. Boot & 数据结构完整性');
+
+    assert(typeof GEN_MODULE !== 'undefined', 'GEN_MODULE 存在');
+    assert(typeof GEN_GENERALS !== 'undefined', 'GEN_GENERALS 存在');
+    assert(typeof GEN_STATE !== 'undefined', 'GEN_STATE 存在');
+    assert(typeof GEN_CUR !== 'undefined', 'GEN_CUR 存在');
+    assert(typeof GEN_MULT !== 'undefined', 'GEN_MULT 存在');
+    assert(typeof GB_GEN_VIEW !== 'undefined', 'GB_GEN_VIEW 视图存在');
+
+    const genKeys = Object.keys(GEN_GENERALS);
+    assert(genKeys.length === 6, '6 位仙尊已注册（实际 ' + genKeys.length + '）');
+
+    const expectedGens = ['yuanshi', 'tongtian', 'laojun', 'yinjie', 'zhundi', 'yaochi'];
+    expectedGens.forEach(gk => {
+      assert(GEN_GENERALS[gk] !== undefined, '仙尊 ' + gk + ' 存在');
+      assert(GEN_GENERALS[gk].name, '仙尊 ' + gk + ' 有中文名');
+      assert(GEN_GENERALS[gk].icon, '仙尊 ' + gk + ' 有图标');
+    });
+
+    assert(typeof GEN_CUR.defs['gen_merit'] !== 'undefined', '功德 gen_merit 已注册');
+    assert(GEN_CUR.value('gen_merit') === 0, '初始功德 = 0');
+    assert(GEN_MODULE.STAT.values.gen_questsCompleted.value === 0, '初始 questsCompleted = 0');
+    assert(GEN_MODULE.STAT.values.gen_stagesCleared.value === 0, '初始 stagesCleared = 0');
+
+    const mod = GB_MODULES.get('general');
+    assert(mod !== null, 'GB_MODULES 已注册 general 模块');
+    assert(mod.tickSpeed === 1, 'tickSpeed = 1');
+    assert(mod.unlockNeeded === 'generalFeature', 'unlockNeeded = generalFeature');
+
+    genKeys.forEach(gk => {
+      assert(GEN_STATE.quests[gk] !== undefined, 'GEN_STATE.quests.' + gk + ' 存在');
+      const questKeys = Object.keys(GEN_GENERALS[gk].quests);
+      questKeys.forEach(qk => {
+        const qs = GEN_STATE.quests[gk][qk];
+        assert(qs !== undefined, 'GEN_STATE.quests.' + gk + '.' + qk + ' 存在');
+        assert(qs.stage === 0, '初始 stage = 0');
+        assert(qs.completed === false, '初始 completed = false');
+      });
+    });
+
+    // ============ 2. 查询 API ============
+    section('2. 查询 API');
+    assert(GEN_MODULE.getQuestStage('yuanshi', 'dao') === 0, 'getQuestStage yuanshi/dao = 0');
+    assert(GEN_MODULE.isQuestCompleted('yuanshi', 'dao') === false, 'isQuestCompleted yuanshi/dao = false');
+
+    // ============ 3. Tick 推进：unlock 条件 ============
+    section('3. Tick 推进：unlock 类型条件');
+
+    // 解锁 generalFeature（让 tick 守卫通过）
+    GB_UNLOCK.unlock('generalFeature');
+
+    // 元始天尊 dao 第 0 阶段需要 daoFeature
+    assert(GEN_MODULE.getQuestStage('yuanshi', 'dao') === 0, '初始 stage=0');
+    GEN_MODULE.RT.tick();
+    assert(GEN_MODULE.getQuestStage('yuanshi', 'dao') === 0, 'tick 后仍 0（daoFeature 未解锁）');
+
+    GB_UNLOCK.unlock('daoFeature');
+    GEN_MODULE.RT.tick();
+    assert(GEN_MODULE.getQuestStage('yuanshi', 'dao') === 1, '解锁 daoFeature → stage 0→1');
+    assert(GEN_CUR.value('gen_merit') === 10, '功德 +10');
+    assert(GEN_MODULE.STAT.values.gen_stagesCleared.value === 1, 'stagesCleared = 1');
+
+    GB_UNLOCK.unlock('villFeature');
+    GEN_MODULE.RT.tick();
+    assert(GEN_MODULE.getQuestStage('yuanshi', 'dao') === 2, '解锁 villFeature → stage 1→2');
+    assert(GEN_CUR.value('gen_merit') === 30, '功德 +20 = 累计 30');
+
+    // ============ 4. Tick 推进：stat 条件 ============
+    section('4. Tick 推进：stat 类型条件');
+
+    if (!GB_MODULES._byPrefix['lm']) GB_MODULES._byPrefix['lm'] = { core: { STAT: { values: {} } } };
+    GB_MODULES._byPrefix['lm'].core.STAT.values['lm_maxDepth0'] = { total: 55, value: 55 };
+    GEN_MODULE.RT.tick();
+    assert(GEN_MODULE.getQuestStage('yuanshi', 'dao') === 3, 'lm_maxDepth0≥50 → stage 2→3');
+    assert(GEN_MODULE.isQuestCompleted('yuanshi', 'dao') === true, 'dao 任务线全部完成');
+    assert(GEN_MODULE.STAT.values.gen_questsCompleted.value === 1, 'questsCompleted = 1');
+    assert(GEN_CUR.value('gen_merit') === 80, '功德 +50 = 累计 80');
+
+    // ============ 5. 通天教主 ============
+    section('5. 通天教主 faFeature / hoFeature / ruFeature 链');
+
+    GB_UNLOCK.unlock('faFeature');
+    GEN_MODULE.RT.tick();
+    assert(GEN_MODULE.getQuestStage('tongtian', 'fa') === 1, 'faFeature → tongtian/fa 0→1');
+    assert(GEN_CUR.value('gen_merit') === 90, '功德 +10');
+
+    GB_UNLOCK.unlock('hoFeature');
+    GEN_MODULE.RT.tick();
+    assert(GEN_MODULE.getQuestStage('tongtian', 'fa') === 2, 'hoFeature → tongtian/fa 1→2');
+    assert(GEN_CUR.value('gen_merit') === 110, '功德 +20');
+
+    GB_UNLOCK.unlock('ruFeature');
+    GEN_MODULE.RT.tick();
+    assert(GEN_MODULE.isQuestCompleted('tongtian', 'fa') === true, 'ruFeature → tongtian/fa 完成');
+    assert(GEN_CUR.value('gen_merit') === 210, '功德 +100 = 累计 210');
+
+    // ============ 6. Snapshot / Restore ============
+    section('6. Snapshot / Restore 往返');
+
+    const meritBefore = GEN_CUR.value('gen_merit');
+    const snap = GEN_MODULE.snapshot();
+    assert(typeof snap === 'object', 'snapshot 返回对象');
+    assert(snap.cur_merit === meritBefore, 'snapshot 含功德 = ' + meritBefore);
+    assert(snap.yuanshi && snap.yuanshi.dao === 3, 'snapshot 含 yuanshi.dao stage=3');
+    assert(snap.tongtian && snap.tongtian.fa === 3, 'snapshot 含 tongtian.fa stage=3');
+
+    GEN_MODULE.hardReset();
+    assert(GEN_CUR.value('gen_merit') === 0, 'hardReset 功德清空');
+    assert(GEN_MODULE.getQuestStage('yuanshi', 'dao') === 0, 'hardReset stage 归零');
+    assert(GEN_MODULE.isQuestCompleted('yuanshi', 'dao') === false, 'hardReset completed=false');
+    assert(GEN_MODULE.STAT.values.gen_questsCompleted.value === 0, 'hardReset questsCompleted=0');
+    assert(GEN_MODULE.STAT.values.gen_stagesCleared.value === 0, 'hardReset stagesCleared=0');
+
+    GEN_MODULE.restore(snap);
+    assert(GEN_CUR.value('gen_merit') === meritBefore, 'restore 功德恢复 = ' + meritBefore);
+    assert(GEN_MODULE.getQuestStage('yuanshi', 'dao') === 3, 'restore stage 恢复 = 3');
+    assert(GEN_MODULE.isQuestCompleted('yuanshi', 'dao') === true, 'restore completed 恢复 = true');
+    assert(GEN_MODULE.getQuestStage('tongtian', 'fa') === 3, 'restore tongtian/fa 恢复 = 3');
+
+    // ============ 7. 子 feature 守卫 ============
+    section('7. 子 feature 解锁守卫');
+
+    assert(GEN_GENERALS.laojun.unlock === 'generalOppenschroeSubfeature', 'laojun 解锁条件正确');
+    GB_UNLOCK.unlock('generalOppenschroeSubfeature');
+    GB_UNLOCK.unlock('daoGemDiamondSubfeature');
+    GEN_MODULE.RT.tick();
+    assert(GEN_MODULE.getQuestStage('laojun', 'alchemy') === 1, 'laojun alchemy 0→1');
+    assert(GEN_CUR.value('gen_merit') === meritBefore + 30, '功德 +30');
+
+    // ============ 8. 视图渲染 ============
+    section('8. 视图渲染');
+
+    const headerHtml = GB_GEN_VIEW.renderHeader();
+    assert(typeof headerHtml === 'string', 'renderHeader 返回字符串');
+    assert(headerHtml.length > 20, 'renderHeader chars=' + headerHtml.length);
+    assert(headerHtml.indexOf('功德') >= 0, 'renderHeader 含"功德"');
+
+    const generalsHtml = GB_GEN_VIEW.renderGenerals();
+    assert(typeof generalsHtml === 'string', 'renderGenerals 返回字符串');
+    assert(generalsHtml.length > 100, 'renderGenerals chars=' + generalsHtml.length);
+    assert(generalsHtml.indexOf('元始天尊') >= 0, '含元始天尊');
+    assert(generalsHtml.indexOf('通天教主') >= 0, '含通天教主');
+    assert(generalsHtml.indexOf('太上老君') >= 0, '含太上老君');
+    assert(generalsHtml.indexOf('接引道人') >= 0, '含接引道人');
+    assert(generalsHtml.indexOf('准提道人') >= 0, '含准提道人');
+    assert(generalsHtml.indexOf('瑶池圣母') >= 0, '含瑶池圣母');
+
+    // renderGeneralCard（已解锁）
+    const yuanCard = GB_GEN_VIEW.renderGeneralCard('yuanshi');
+    assert(yuanCard.indexOf('locked') === -1, '已解锁卡片不含 locked 类');
+    assert(yuanCard.indexOf('元始天尊') >= 0, '卡片含仙尊名');
+
+    // renderGeneralCard（未解锁的 laojun 但子 feature 已解锁）
+    const laoCard = GB_GEN_VIEW.renderGeneralCard('laojun');
+    assert(laoCard.length > 50, 'laojun 卡片可渲染');
+
+    // renderGeneralCard（未解锁且无子 feature 的 yaochi）
+    const yaoCard = GB_GEN_VIEW.renderGeneralCard('yaochi');
+    assert(yaoCard.indexOf('locked') >= 0, 'yaochi 未解锁卡片含 locked 类');
+
+    // renderTask
+    const task = { type: 'unlock', name: 'daoFeature', op: '==', value: true };
+    const taskHtml = GB_GEN_VIEW.renderTask(task, 0);
+    assert(typeof taskHtml === 'string' && taskHtml.length > 10, 'renderTask 产出 HTML');
+
+    // renderReward
+    const rewardHtml = GB_GEN_VIEW.renderReward({ merit: 50 });
+    assert(rewardHtml.indexOf('50') >= 0, 'renderReward 含数值');
+
+    // _taskDesc 覆盖检查
+    const desc1 = GB_GEN_VIEW._taskDesc({ type: 'unlock', name: 'generalFeature' });
+    const desc2 = GB_GEN_VIEW._taskDesc({ type: 'stat', feature: 'lm', name: 'lm_maxDepth0' });
+    assert(typeof desc1 === 'string' && desc1.length > 0, 'unlock 类型任务描述非空');
+    assert(typeof desc2 === 'string' && desc2.length > 0, 'stat 类型任务描述非空');
+
+    // ============ 总结 ============
+    section('总结');
+    const total = pass + fail;
+    lines.push(`\n共 ${total} 项检查：${pass} 通过 ✓，${fail} 失败 ✗`);
+    lines.push(fail === 0 ? '\n🎉 ALL TESTS PASSED' : '\n⚠️ SOME TESTS FAILED');
+
+    out.textContent = lines.join('\n');
+    out.className = fail === 0 ? 'pass' : 'fail';
+  })();
+  </script>
+</body>
+</html>

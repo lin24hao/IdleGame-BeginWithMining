@@ -254,13 +254,31 @@ const SC_STAT = {
   reset(feature) { Object.keys(this.values).forEach(k => { if (k.indexOf((feature || 'school') + '_') === 0) this.values[k] = { value: 0, total: 0, max: 0 }; }); }
 };
 
-/* ===== 4. SC_UNLOCK：解锁系统 ===== */
+/* ===== 4. SC_UNLOCK：解锁系统（同步 GB_UNLOCK 全局状态） =====
+ * SC_UNLOCK 原本是藏经阁模块自管的解锁表，但项目已经有 GB_UNLOCK + GB_META 统一管理
+ * 所有 Feature / Subfeature 的解锁（globalLevel 阈值触发），所以 SC_UNLOCK 的查询必
+ * 须透传到 GB_UNLOCK，否则藏经阁各学科永远显示"未解锁"。
+ */
 const SC_UNLOCK = {
   items: {},
-  init(id) { if (!this.items[id]) this.items[id] = { init: false, see: false, use: false }; return this.items[id]; },
+  init(id) {
+    if (!this.items[id]) this.items[id] = { init: false, see: false, use: false };
+    // 同步 GB_UNLOCK 的全局解锁状态
+    if (typeof GB_UNLOCK !== 'undefined') {
+      const gbi = GB_UNLOCK.items[id];
+      if (gbi) { this.items[id].see = !!gbi.see; this.items[id].use = !!gbi.use; }
+    }
+    return this.items[id];
+  },
   unlock(id) { const it = this.init(id); it.init = true; it.see = true; it.use = true; return it; },
-  isUnlocked(id) { return !!(this.items[id] && this.items[id].use); },
-  isVisible(id) { return !!(this.items[id] && this.items[id].see); }
+  isUnlocked(id) {
+    if (typeof GB_UNLOCK !== 'undefined') return GB_UNLOCK.isUnlocked(id);
+    return !!(this.items[id] && this.items[id].use);
+  },
+  isVisible(id) {
+    if (typeof GB_UNLOCK !== 'undefined') return GB_UNLOCK.isVisible(id);
+    return !!(this.items[id] && this.items[id].see);
+  }
 };
 
 /* ===== 5. SC_UPG：升级项系统（premium 藏经弟子等） ===== */

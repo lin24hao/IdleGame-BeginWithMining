@@ -51,8 +51,16 @@ var GB_META = {
     xianqiFeature: 225,    // 仙器（原 treasureFeature）
   },
 
-  /* 把 gooboo 子 feature 解锁阈值合并进来（和 globalLevelNotes 对应） */
+  /* 子 feature 解锁阈值（和 globalLevel 对齐）
+   * 仙尊解锁链：
+   *   generalFeature (100) → 元始天尊 + 太上老君（null，随 generalFeature 一起）
+   *   generalOrladeeSubfeature (1000) → 通天教主（gooboo 原版 1000）
+   *   generalBelluxSubfeature (1100) → 接引道人（慈悲）
+   *   generalOnocluaSubfeature (1300) → 准提道人（智慧）
+   *   generalOmnisolixSubfeature (1500) → 瑶池圣母（仙界）
+   */
   SUBFEATURE_THRESHOLDS: {
+    scLibrarySubfeature: 25,     // 藏书阁 tab：与 scFeature 同阈值
     scLiteratureSubfeature: 50,
     daoGemDiamondSubfeature: 50,   // 混元进度条解锁
     scHistorySubfeature: 180,
@@ -61,7 +69,10 @@ var GB_META = {
     villCraftingSubfeature: 800,
     scChemistrySubfeature: 930,
     generalOrladeeSubfeature: 1000,
+    generalBelluxSubfeature: 1100,
     hoClassesSubfeature: 1100,
+    generalOnocluaSubfeature: 1300,
+    generalOmnisolixSubfeature: 1500,
   },
 
   /* 给各模块的子 feature 映射表（用于 navigate 和 通知） */
@@ -73,6 +84,7 @@ var GB_META = {
     scHistorySubfeature: 'school',
     scArtSubfeature: 'school',
     scChemistrySubfeature: 'school',
+    scLibrarySubfeature: 'school',
   },
 
   /* 初始化所有已知 Feature key（让存档里即使还没解锁也有 entry） */
@@ -152,6 +164,7 @@ var GB_META = {
         scHistorySubfeature: '藏经阁·史卷',
         scArtSubfeature: '藏经阁·绘卷',
         scChemistrySubfeature: '藏经阁·丹术',
+        scLibrarySubfeature: '藏经阁·藏书阁',
         lmGasSubfeature: '灵脉·气态灵矿',
         villCraftingSubfeature: '宗门·工坊',
         hoClassesSubfeature: '降妖·流派',
@@ -285,6 +298,11 @@ var GB_META = {
     if (!data || typeof data !== 'object') return;
     this.state.globalLevel = data.globalLevel || 0;
     this.state.globalLevelParts = data.globalLevelParts || {};
+    // 补扫：存档恢复后 globalLevel 可能已经远超阈值，但 _checkAllUnlocks
+    // 只在增长瞬间触发（oldLevel < newLevel），restore 没有这个增量事件
+    if (this.state.globalLevel > 0) {
+      this._checkAllUnlocks(0, this.state.globalLevel);
+    }
   },
 
   /* ============ 便捷查询 ============ */

@@ -22,22 +22,56 @@
  *     ...（按版本倒序，最新在前）
  *   ]
  *
- * feature → unlockKey 映射在 GB_APP._featureUnlockMap 里维护。
+ * feature → unlockKey 映射在 GB_APP 内部维护。
  * feature='meta' 的条目始终可见（全局改动，不绑定具体玩法）。
  */
 var GB_PATCHNOTES = [
 
   {
-    version: '0.3.1',
-    date: '2026-10-01',
+    version: '0.4.0',
+    date: '2026-10-02',
     groups: [
+
+      { feature: 'dao', sections: [
+        { type: 'added', label: '新增', items: [
+          '大道法则：gooboo gem 宝石模块修仙化移植，采集赤元/青元/玄元/紫元/黄元/混元/道元七种五行元，贯通天地大道',
+          '7 种五行元按五行生克循环产出，升级可提升产出效率与容量',
+        ]},
+      ]},
+
+      { feature: 'lingbao', sections: [
+        { type: 'added', label: '新增', items: [
+          '先天灵宝：天生地养的灵宝系统，灵宝品阶 / 灵纹刻印 / 祭台供奉三件套',
+          '3 座祭台可同时供奉灵宝，灵纹自动绘制周期 250000 秒',
+        ]},
+      ]},
+
+      { feature: 'xianqi', sections: [
+        { type: 'added', label: '新增', items: [
+          '仙器：gooboo treasure 模块修仙化移植，日精月华自动精进的仙器系统',
+          'tick 速度 = 每天一次，带"日精月华"属性的仙器每日自动涨天数 → 等级自动提升',
+          '3 种仙器类型：凡器（单效果槽）、双灵宝（双效果槽）、...',
+        ]},
+      ]},
+
+      { feature: 'general', sections: [
+        { type: 'added', label: '新增', items: [
+          '圣人指引：gooboo general quest 系统完整移植',
+          'stage → task 推进模型，7 种任务类型覆盖各模块 stat、物品、解锁条件',
+          '每秒 tick 扫 quest，条件满足即 complete → 发放奖励并自动推进下一阶段',
+        ]},
+      ]},
 
       { feature: 'meta', sections: [
         { type: 'added', label: '新增', items: [
-          '版本更新日志：关于弹窗底部新增版本号显示和「版本更新日志」按钮，点击后查看全版本改动记录',
-          '版本日志按玩法分组展示各版本的新增、改动、修复、调整条目',
-          '未解锁玩法的改动自动隐藏，版本底部显示「另有 N 条改动来自未解锁玩法」计数提示',
-          '若某版本所有玩法均未解锁，该版本折叠显示为一行锁定提示',
+          '版本更新日志系统：关于弹窗新增版本号显示和「版本更新日志」入口，支持按玩法分组查看、未解锁内容自动隐藏、整版折叠锁定提示',
+          'icon.js PATHS 自校验防线：三条致命规则（含双引号 / 不以 SVG 命令开头 / 空 path）+ 长度偏长仅 debug，触发时红条 8 秒 + console.warn，拦截损坏 path 静默进入生产',
+        ]},
+        { type: 'fixed', label: '修复', items: [
+          '全局 tick 每秒刷新时 innerHTML 整块重写导致各视图滚动位置归零——滑到底部后资源刷新被强制拉回顶部',
+          '为灵脉 / 宗门 / 灵植园 / 降妖 / 藏经阁 五个视图统一加入 scrollTop 保存/恢复机制（秘境模块原已有此机制），切换 tab 时仍自动回到顶部',
+          '灵脉秘法升级列表内层独立滚动容器（.scroll-container-tab / .lm-upg-grid-scroll）不保存滚动位置，现在与外层一并恢复',
+          'icon.js mdi-chili-hot SVG path 意外膨胀至 2581 字符 + 混用双引号导致 SyntaxError 全屏黑屏，已替换为 MDI 官方正确 path',
         ]},
       ]},
 
