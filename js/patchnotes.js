@@ -28,6 +28,20 @@
 var GB_PATCHNOTES = [
 
   {
+    version: '0.4.2',
+    date: '2026-10-03',
+    groups: [
+
+      { feature: 'meta', sections: [
+        { type: 'added', label: '新增', items: [
+          '时间跳过功能：设置弹窗内可手动跳过一定时间，离线收益即时结算',
+        ]},
+      ]},
+
+    ]
+  },
+
+  {
     version: '0.4.1',
     date: '2026-10-02',
     groups: [
