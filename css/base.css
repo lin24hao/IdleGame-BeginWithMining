@@ -156,6 +156,25 @@ body {
 }
 .app-bar-btn:hover { color: var(--text-main); background: var(--surface-tile); }
 
+/* ---------- 顶栏沙漏（金尘·时间跳过） ---------- */
+.app-bar-btn.hourglass-btn {
+  width: auto; min-width: 56px; padding: 0 12px; gap: 6px;
+  background: linear-gradient(135deg, rgba(251,191,36,0.12), rgba(217,119,6,0.08));
+  border: 1px solid rgba(251,191,36,0.3);
+  color: #fde68a;
+  margin-left: 12px;
+}
+.app-bar-btn.hourglass-btn:hover {
+  background: linear-gradient(135deg, rgba(251,191,36,0.25), rgba(217,119,6,0.18));
+  border-color: #fbbf24;
+  color: #fbbf24;
+}
+.hg-icon-sand { font-size: 18px; line-height: 1; }
+.hg-dust-count {
+  font-size: 13px; font-weight: 600; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- 3. 图标 ---------- */
 .gb-icon { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 

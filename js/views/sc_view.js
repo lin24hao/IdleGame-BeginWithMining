@@ -92,6 +92,12 @@ var GB_SC_VIEW = {
   mg: {},          // 当前小游戏状态
   customTimer: ['history', 'chemistry'],
 
+  /* --- 金尘时间跳过弹窗 --- */
+  _dlgOpen: false,
+  _dlgMinute: 5,   // 默认跳过 5 分钟
+
+  toast(msg, color) { if (typeof GB_APP !== 'undefined' && GB_APP.toast) GB_APP.toast(msg, color); },
+
   /* ---------- 文案 ---------- */
   T(n) { const x = SC_TEXT && SC_TEXT.TERMS; return (x && x[n]) || n; },
   curName(k) { const x = SC_TEXT && SC_TEXT.CURRENCY; return (x && x[k]) || String(k).replace(/^school_/, '').replace(/^gem_/, ''); },
@@ -247,6 +253,8 @@ var GB_SC_VIEW = {
     if (tag === 'skip') { SC_RT.act('skipBook', val); this.save(); this.render(); return; }
     if (tag === 'read') { SC_RT.act('readBook', val); this.save(); this.render(); return; }
     if (tag === 'feat') { this._libFeature = val; this.render(); return; }
+    // --- 金尘时间跳过（委托给全局 GB_TIME_SKIP） ---
+    if (tag === 'openTs') { GB_TIME_SKIP && GB_TIME_SKIP.open(); return; }
     if (tag === 'leave') { this.leaveSchool(); return; }
     if (tag === 'mg-answer') { this.mgAnswer(); return; }
     if (tag === 'mg-art') { this.mgArtAnswer(+val); return; }
@@ -384,6 +392,7 @@ var GB_SC_VIEW = {
           <div class="sc-curchip">${this.icon('mdi-ticket-account', 16)}${this.curName('school_examPass')} ${this.fmt(pass)}</div>
           <button class="sc-buy ${sapphire >= SCHOOL_EXAM_PASS_PRICE ? '' : 'disabled'}" data-sact="convert" ${sapphire >= SCHOOL_EXAM_PASS_PRICE ? '' : 'disabled'}
             title="${this.T('buyPass')}">${this.icon('mdi-crystal-ball', 14)}${this.T('convert')} · 考签×1 → 金尘</button>
+          <button class="sc-buy ts-btn" data-sact="openTs" title="消耗金尘加速时间流逝">${this.icon('mdi-timer', 14)}时间跳过</button>
           ${dustMult < 1 ? `<span class="sc-hint">${this.icon('mdi-head-question', 16)}${this.T('beginner').replace('{0}', this.fmt(Math.round(dustMult * 100)) + '%')}</span>` : ''}
           ${maxMp > 1 ? this.renderMultipass(maxMp) : ''}
         </div>
@@ -528,6 +537,7 @@ var GB_SC_VIEW = {
       <div class="sc-page">
         <div class="sc-top">
           <span class="sc-curchip">${this.icon('mdi-book', 16)}${this.fmt(booksLeft)} / ${this.fmt(maxBooks)} ${this.T('book')}</span>
+          <button class="sc-buy ts-btn" data-sact="openTs" title="消耗金尘加速时间流逝">${this.icon('mdi-timer', 14)}时间跳过</button>
         </div>
         <div class="sc-feat-tabs">${featTabs}</div>
         <div class="sc-libgrid">
@@ -537,6 +547,148 @@ var GB_SC_VIEW = {
         </div>
       </div>`;
   },
+
+  /* ================= 金尘时间跳过 ================= */
+  /* 时间跳过消耗公式：原版 cost = round(minutes^0.9 * 100)，我们改为十分之一 → * 10 */
+  timeSkipCost(minutes) {
+    if (!minutes || minutes <= 0) return 0;
+    return Math.round(Math.pow(Math.min(minutes, 99999), 0.9) * 10);
+  },
+  /* 找到当前激活的主玩法模块（灵脉/宗门/降妖/灵植园/藏宝阁），tick 它跳过时间 */
+  _activeMainFeature() {
+    const mains = ['lm', 'village', 'horde', 'farm', 'ruin'];
+    const cur = typeof GB_APP !== 'undefined' ? GB_APP.currentFeature : null;
+    if (cur && mains.indexOf(cur) >= 0) return cur;
+    // 兜底：找第一个已解锁的主玩法
+    for (let i = 0; i < mains.length; i++) {
+      try {
+        const m = GB_MODULES.get(mains[i]);
+        if (m && GB_UNLOCK && GB_UNLOCK.isUnlocked(mains[i] + 'Feature')) return mains[i];
+      } catch (e) {}
+    }
+    return null;
+  },
+  /* 中文模块名 */
+  _modCN(id) {
+    return ({ lm: '灵脉', village: '宗门', horde: '降妖', farm: '灵植园', ruin: '藏宝阁' })[id] || id;
+  },
+  /* 格式化秒数为可读时间 */
+  _fmtSec(sec) {
+    if (sec < 60) return sec + ' 秒';
+    if (sec < 3600) return Math.round(sec / 60) + ' 分钟';
+    const h = Math.floor(sec / 3600);
+    const m = Math.round((sec % 3600) / 60);
+    return h + ' 小时' + (m > 0 ? m + ' 分' : '');
+  },
+  performTimeSkip(minutes) {
+    minutes = parseInt(minutes) || 0;
+    if (minutes <= 0) return;
+    const cost = this.timeSkipCost(minutes);
+    const dust = this.cur('school_goldenDust');
+    if (dust < cost) {
+      this.toast('金尘不足！需要 ' + this.fmt(cost) + '，持有 ' + this.fmt(dust), '#ef4444');
+      return;
+    }
+    // 扣费
+    SCTORE.dispatch('currency/spend', { feature: 'school', name: 'goldenDust', amount: cost });
+    // 找目标模块
+    const target = this._activeMainFeature();
+    const seconds = minutes * 60;
+    let ticked = false;
+    if (target) {
+      try {
+        const m = GB_MODULES.get(target);
+        if (m && m.core && m.core.RT && typeof m.core.RT.tick === 'function') {
+          m.core.RT.tick(seconds);
+          ticked = true;
+        }
+      } catch (e) {}
+    }
+    // 也 tick 藏经阁自身（考试进度/bonusDust 溢出转移等）
+    try { SC_RT.tick(seconds); } catch (e) {}
+    // tick 后统一刷新 meta
+    try { if (typeof GB_META !== 'undefined') GB_META.syncAll(); } catch (e) {}
+    if (typeof GB_MODULES !== 'undefined') { try { GB_MODULES.saveAll(); } catch (e) {} }
+    this.save();
+
+    const msg = ticked
+      ? `⏱ 时间跳过成功！消耗 ${this.fmt(cost)} 金尘，加速 ${this._fmtSec(seconds)}（${this._modCN(target)}）`
+      : `⏱ 时间跳过成功！消耗 ${this.fmt(cost)} 金尘，已加速 ${this._fmtSec(seconds)}`;
+    this.toast(msg, '#4ade80');
+    this._dlgOpen = false;
+    this.render();
+  },
+
+  /* 弹窗 UI */
+  renderTimeSkipDialog() {
+    const d = this.cur('school_goldenDust');
+    const m = Math.max(1, Math.min(99999, this._dlgMinute || 5));
+    const cost = this.timeSkipCost(m);
+    const canAfford = d >= cost;
+    const target = this._activeMainFeature();
+    const targetName = target ? this._modCN(target) : '主玩法';
+    const sec = m * 60;
+    return `
+      <div class="sc-ts-overlay" data-sact="closeTs" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this) GB_SC_VIEW._dlgOpen=false,GB_SC_VIEW.render()">
+        <div class="sc-ts-card" data-sact="noop" style="background:linear-gradient(180deg,#1e293b,#0f172a);border:1px solid rgba(251,191,36,0.3);border-radius:16px;padding:24px;max-width:420px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,0.6);font-family:'Noto Sans SC',sans-serif;">
+          <div style="text-align:center;margin-bottom:16px;">
+            <div style="font-size:20px;font-weight:700;color:#fbbf24;display:flex;align-items:center;justify-content:center;gap:8px;">
+              <span style="font-size:28px;">⏳</span> 时间跳过
+            </div>
+            <div style="color:#94a3b8;font-size:13px;margin-top:4px;">消耗金尘加速${targetName}时间流逝</div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(30,41,59,0.8);border-radius:10px;padding:12px 16px;margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:24px;">⏱</span>
+              <div>
+                <div style="color:#fbbf24;font-weight:600;">${this.fmt(d)}</div>
+                <div style="color:#64748b;font-size:12px;">持有金尘</div>
+              </div>
+            </div>
+            <div style="color:#475569;">→</div>
+            <div style="text-align:right;">
+              <div style="color:${canAfford ? '#4ade80' : '#ef4444'};font-weight:600;">${this.fmt(cost)}</div>
+              <div style="color:#64748b;font-size:12px;">消耗金尘</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <div style="color:#cbd5e1;font-size:13px;margin-bottom:8px;">跳过时间（分钟）</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="number" min="1" max="99999" value="${m}"
+                style="flex:1;background:rgba(15,23,42,0.9);border:1px solid #334155;color:#f1f5f9;padding:10px 14px;border-radius:10px;font-size:16px;outline:none;"
+                onchange="GB_SC_VIEW._dlgMinute=Math.max(1,Math.min(99999,parseInt(this.value)||1));GB_SC_VIEW.render()"
+              />
+              <button data-sact="tsMax" title="最大可跳过"
+                style="background:rgba(251,191,36,0.2);border:1px solid #fbbf24;color:#fbbf24;padding:10px 16px;border-radius:10px;cursor:pointer;font-weight:600;">最大</button>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+              ${[5, 15, 30, 60, 120].map(v => `
+                <button data-sact="tsMinute:${v}"
+                  style="background:rgba(51,65,85,0.6);border:1px solid #475569;color:#cbd5e1;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;">${v === 60 ? '1时' : v === 120 ? '2时' : v + '分'}</button>
+              `).join('')}
+            </div>
+          </div>
+
+          <div style="background:rgba(30,41,59,0.6);border-radius:8px;padding:10px 14px;margin-bottom:16px;color:#94a3b8;font-size:12px;line-height:1.6;">
+            <div>📜 加速时长：<span style="color:#f1f5f9;">${this._fmtSec(sec)}</span></div>
+            <div>🎯 加速模块：<span style="color:#f1f5f9;">${targetName}</span></div>
+            <div>💎 金尘公式：<span style="color:#64748b;">消耗 = ⌈分钟^0.9 × 10⌉</span></div>
+          </div>
+
+          <div style="display:flex;gap:8px;">
+            <button data-sact="closeTs"
+              style="flex:1;background:rgba(51,65,85,0.8);border:1px solid #475569;color:#94a3b8;padding:12px;border-radius:10px;cursor:pointer;font-weight:500;">取消</button>
+            <button data-sact="doTs" ${canAfford ? '' : 'disabled'}
+              style="flex:2;background:${canAfford ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(71,85,105,0.5)'};border:none;color:${canAfford ? '#fff' : '#64748b'};padding:12px;border-radius:10px;cursor:${canAfford ? 'pointer' : 'not-allowed'};font-weight:600;font-size:15px;">
+              ⏳ 确认跳过（${this.fmt(cost)} 金尘）
+            </button>
+          </div>
+        </div>
+      </div>`;
+  },
+
   renderBookUpgrade(key) {
     const b = this.state.book[key];
     if (!b) return '';
@@ -1468,6 +1620,228 @@ var GB_SC_VIEW = {
   }
 };
 if (typeof module !== "undefined") { module.exports = GB_SC_VIEW; }
+
+/* ===== GB_TIME_SKIP：金尘时间跳过全局弹窗（独立于 sc_view，任何页面可触发） ===== */
+var GB_TIME_SKIP = {
+  _dlg: null,       // DOM overlay 元素
+  _minute: 5,
+
+  /* 核心公式：原版 minutes^0.9 * 100，我们 * 10（十分之一） */
+  cost(minutes) {
+    if (!minutes || minutes <= 0) return 0;
+    return Math.round(Math.pow(Math.min(minutes, 99999), 0.9) * 10);
+  },
+
+  /* 当前持有金尘（自动 init SC_RT） */
+  _dust() {
+    try {
+      const SC = GB_MODULES.get('school');
+      if (!SC || !SC.core || !SC.core.CUR) return 0;
+      if (!SC.core.RT.ready) { try { SC.core.RT.init({}); } catch(e) {} }
+      return SC.core.CUR.value('school_goldenDust');
+    } catch (e) { return 0; }
+  },
+  _cap() {
+    try {
+      const SC = GB_MODULES.get('school');
+      if (!SC || !SC.core || !SC.core.CUR) return 0;
+      if (!SC.core.RT.ready) { try { SC.core.RT.init({}); } catch(e) {} }
+      return SC.core.CUR.cap('school_goldenDust');
+    } catch (e) { return 0; }
+  },
+
+  /* 当前激活主玩法（用于 tick） */
+  _activeMod() {
+    const mains = ['lm', 'village', 'horde', 'farm', 'ruin'];
+    const cur = typeof GB_APP !== 'undefined' ? GB_APP.currentFeature : null;
+    if (cur && mains.indexOf(cur) >= 0) return cur;
+    for (let i = 0; i < mains.length; i++) {
+      try {
+        const m = GB_MODULES.get(mains[i]);
+        if (m && GB_UNLOCK && GB_UNLOCK.isUnlocked(mains[i] + 'Feature')) return mains[i];
+      } catch (e) {}
+    }
+    return null;
+  },
+  _modCN(id) {
+    return ({ lm: '灵脉', village: '宗门', horde: '降妖', farm: '灵植园', ruin: '藏宝阁' })[id] || id;
+  },
+  _fmtSec(sec) {
+    if (sec < 60) return sec + ' 秒';
+    if (sec < 3600) return Math.round(sec / 60) + ' 分钟';
+    const h = Math.floor(sec / 3600);
+    const m = Math.round((sec % 3600) / 60);
+    return h + ' 小时' + (m > 0 ? m + ' 分' : '');
+  },
+  _fmt(n) { return typeof formatNum === 'function' ? formatNum(n) : (Math.floor(n) || 0).toLocaleString(); },
+
+  /* 打开弹窗 */
+  open() {
+    if (this._dlg) { this.close(); return; }
+    this._minute = this._minute || 5;
+    this._dlg = document.createElement('div');
+    this._dlg.id = 'gb-time-skip-dlg';
+    this._dlg.innerHTML = this._render();
+    document.body.appendChild(this._dlg);
+    this._bindEvents();
+  },
+  /* 关闭弹窗 */
+  close() {
+    if (this._dlg) { this._dlg.remove(); this._dlg = null; }
+  },
+  /* 刷新显示（sc_view 页面内按钮点「最大」后需要刷新） */
+  refresh() {
+    if (!this._dlg) return;
+    this._dlg.innerHTML = this._render();
+    this._bindEvents();
+  },
+  isOpen() { return !!this._dlg; },
+
+  _bindEvents() {
+    const self = this;
+    // overlay 点击关闭
+    this._dlg.onclick = function(e) {
+      if (e.target === self._dlg) self.close();
+    };
+    // 取消按钮
+    const closeBtn = this._dlg.querySelector('[data-ts-close]');
+    if (closeBtn) closeBtn.onclick = function() { self.close(); };
+    // 快捷分钟按钮
+    this._dlg.querySelectorAll('[data-ts-min]').forEach(function(btn) {
+      btn.onclick = function() { self._minute = parseInt(btn.getAttribute('data-ts-min')); self.refresh(); };
+    });
+    // 最大按钮
+    const maxBtn = this._dlg.querySelector('[data-ts-max]');
+    if (maxBtn) maxBtn.onclick = function() {
+      const d = self._dust();
+      self._minute = Math.max(1, Math.floor(Math.pow(d / 10, 1 / 0.9)));
+      self.refresh();
+    };
+    // 确认按钮
+    const okBtn = this._dlg.querySelector('[data-ts-ok]');
+    if (okBtn) okBtn.onclick = function() { self._doSkip(); };
+    // 输入框
+    const input = this._dlg.querySelector('[data-ts-input]');
+    if (input) input.onchange = function() {
+      self._minute = Math.max(1, Math.min(99999, parseInt(this.value) || 1));
+      self.refresh();
+    };
+  },
+
+  _render() {
+    const d = this._dust();
+    const cap = this._cap();
+    const m = Math.max(1, Math.min(99999, this._minute || 5));
+    const cost = this.cost(m);
+    const canAfford = d >= cost;
+    const target = this._activeMod();
+    const targetName = target ? this._modCN(target) : '主玩法';
+    const sec = m * 60;
+    return `
+      <div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;">
+        <div style="background:linear-gradient(180deg,#1e293b,#0f172a);border:1px solid rgba(251,191,36,0.3);border-radius:16px;padding:24px;max-width:420px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,0.6);font-family:'Noto Sans SC',sans-serif;">
+          <div style="text-align:center;margin-bottom:16px;">
+            <div style="font-size:20px;font-weight:700;color:#fbbf24;display:flex;align-items:center;justify-content:center;gap:8px;">
+              <span style="font-size:28px;">⏳</span> 时间跳过
+            </div>
+            <div style="color:#94a3b8;font-size:13px;margin-top:4px;">消耗金尘加速${targetName}时间流逝</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(30,41,59,0.8);border-radius:10px;padding:12px 16px;margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:24px;">⏱</span>
+              <div>
+                <div style="color:#fbbf24;font-weight:600;">${this._fmt(d)}${isFinite(cap) ? ' / ' + this._fmt(cap) : ''}</div>
+                <div style="color:#64748b;font-size:12px;">持有金尘</div>
+              </div>
+            </div>
+            <div style="color:#475569;">→</div>
+            <div style="text-align:right;">
+              <div style="color:${canAfford ? '#4ade80' : '#ef4444'};font-weight:600;">${this._fmt(cost)}</div>
+              <div style="color:#64748b;font-size:12px;">消耗金尘</div>
+            </div>
+          </div>
+          <div style="margin-bottom:12px;">
+            <div style="color:#cbd5e1;font-size:13px;margin-bottom:8px;">跳过时间（分钟）</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input data-ts-input type="number" min="1" max="99999" value="${m}"
+                style="flex:1;background:rgba(15,23,42,0.9);border:1px solid #334155;color:#f1f5f9;padding:10px 14px;border-radius:10px;font-size:16px;outline:none;"
+              />
+              <button data-ts-max title="最大可跳过"
+                style="background:rgba(251,191,36,0.2);border:1px solid #fbbf24;color:#fbbf24;padding:10px 16px;border-radius:10px;cursor:pointer;font-weight:600;">最大</button>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+              ${[5, 15, 30, 60, 120].map(v => `
+                <button data-ts-min="${v}"
+                  style="background:rgba(51,65,85,0.6);border:1px solid #475569;color:#cbd5e1;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;">${v === 60 ? '1时' : v === 120 ? '2时' : v + '分'}</button>
+              `).join('')}
+            </div>
+          </div>
+          <div style="background:rgba(30,41,59,0.6);border-radius:8px;padding:10px 14px;margin-bottom:16px;color:#94a3b8;font-size:12px;line-height:1.6;">
+            <div>📜 加速时长：<span style="color:#f1f5f9;">${this._fmtSec(sec)}</span></div>
+            <div>🎯 加速模块：<span style="color:#f1f5f9;">${targetName}</span></div>
+            <div>💎 金尘公式：<span style="color:#64748b;">消耗 = ⌈分钟^0.9 × 10⌉</span></div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button data-ts-close
+              style="flex:1;background:rgba(51,65,85,0.8);border:1px solid #475569;color:#94a3b8;padding:12px;border-radius:10px;cursor:pointer;font-weight:500;">取消</button>
+            <button data-ts-ok ${canAfford ? '' : 'disabled'}
+              style="flex:2;background:${canAfford ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(71,85,105,0.5)'};border:none;color:${canAfford ? '#fff' : '#64748b'};padding:12px;border-radius:10px;cursor:${canAfford ? 'pointer' : 'not-allowed'};font-weight:600;font-size:15px;">
+              ⏳ 确认跳过（${this._fmt(cost)} 金尘）
+            </button>
+          </div>
+        </div>
+      </div>`;
+  },
+
+  _doSkip() {
+    const minutes = this._minute || 0;
+    if (minutes <= 0) return;
+    const cost = this.cost(minutes);
+    const dust = this._dust();
+    if (dust < cost) {
+      if (typeof GB_APP !== 'undefined' && GB_APP.toast) GB_APP.toast('金尘不足！需要 ' + this._fmt(cost) + '，持有 ' + this._fmt(dust), '#ef4444');
+      return;
+    }
+    // 扣费
+    try {
+      const SC = GB_MODULES.get('school');
+      SC.core.CUR.spend('school_goldenDust', cost);
+    } catch (e) { return; }
+    // tick 目标模块
+    const target = this._activeMod();
+    const seconds = minutes * 60;
+    let ticked = false;
+    if (target) {
+      try {
+        const m = GB_MODULES.get(target);
+        if (m && m.core && m.core.RT && typeof m.core.RT.tick === 'function') {
+          m.core.RT.tick(seconds);
+          ticked = true;
+        }
+      } catch (e) {}
+    }
+    // tick 藏经阁自身
+    try {
+      const SC2 = GB_MODULES.get('school');
+      if (SC2 && SC2.core && SC2.core.RT && typeof SC2.core.RT.tick === 'function') SC2.core.RT.tick(seconds);
+    } catch (e) {}
+    // 刷新 meta + 存档
+    try { if (typeof GB_META !== 'undefined') GB_META.syncAll(); } catch (e) {}
+    try { if (typeof GB_MODULES !== 'undefined') GB_MODULES.saveAll(); } catch (e) {}
+    if (typeof GB_APP !== 'undefined') {
+      try { GB_APP.persist(); } catch (e) {}
+      GB_APP._updateHourglassBadge();
+    }
+    // 关弹窗 + toast
+    this.close();
+    const msg = ticked
+      ? `⏱ 时间跳过成功！消耗 ${this._fmt(cost)} 金尘，加速 ${this._fmtSec(seconds)}（${this._modCN(target)}）`
+      : `⏱ 时间跳过成功！消耗 ${this._fmt(cost)} 金尘，已加速 ${this._fmtSec(seconds)}`;
+    if (typeof GB_APP !== 'undefined' && GB_APP.toast) GB_APP.toast(msg, '#4ade80');
+    // 刷新 sc_view（如果正在看藏经阁）
+    try { if (typeof GB_SC_VIEW !== 'undefined' && GB_SC_VIEW.el) GB_SC_VIEW.render(); } catch (e) {}
+  }
+};
 
 /* ===== 挂接统一地基：由注册表统一驱动 load / save（tick 已交给全局循环） ===== */
 if (typeof GB_MODULES !== 'undefined') GB_MODULES.attachView('school', GB_SC_VIEW);

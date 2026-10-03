@@ -197,6 +197,7 @@ var GB_APP = {
 
     this.ready = true;
     this.renderShell();
+    this._updateHourglassBadge();
     this.navigate(initialFeature || 'home');
 
     // 统一 Tick：按真实时间差驱动全部模块 + 存档 + 视图刷新
@@ -209,6 +210,7 @@ var GB_APP = {
       try { GB_MODULES.tickAll(t, prev); } catch (e) {}
       this._tickCount++;
       if (this._tickCount % 30 === 0) { this.persist(); GB_MODULES.saveAll(); }
+      if (this._tickCount % 5 === 0) this._updateHourglassBadge();
       this.refreshActiveView();
     }, 1000);
 
@@ -419,6 +421,11 @@ var GB_APP = {
           ${GB_ICON.icon('mdi-magic-staff', 26)}
           <span>修仙·从挖灵石开始</span>
         </div>
+        ${typeof GB_MODULES !== 'undefined' && GB_UNLOCK && GB_UNLOCK.isUnlocked('scFeature') ? `
+        <button class="app-bar-btn hourglass-btn" title="金尘·时间跳过" onclick="GB_TIME_SKIP && GB_TIME_SKIP.open()">
+          <span class="hg-icon-sand">⏳</span>
+          <span class="hg-dust-count" id="hg-dust-count">—</span>
+        </button>` : ''}
         <div class="app-bar-spacer"></div>
         <div class="app-bar-actions">
           <button class="app-bar-btn" title="设置" onclick="GB_APP.openSettings()">${GB_ICON.icon('mdi-cog', 24)}</button>
@@ -836,6 +843,27 @@ var GB_APP = {
     el.textContent = msg;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 2200);
+  },
+
+  /* ============ 顶栏沙漏：刷新金尘显示 ============ */
+  _updateHourglassBadge() {
+    const el = document.getElementById('hg-dust-count');
+    if (!el) return;
+    try {
+      if (!GB_MODULES.get('school')) { el.textContent = '—'; return; }
+      const SC = GB_MODULES.get('school');
+      if (!SC.core || !SC.core.CUR) { el.textContent = '—'; return; }
+      // 确保 SC_RT 已 init（金尘在 SC_CUR 里）
+      if (!SC.core.RT.ready) { try { SC.core.RT.init({}); } catch(e) {} }
+      const dust = SC.core.CUR.value('school_goldenDust');
+      const cap = SC.core.CUR.cap('school_goldenDust');
+      el.textContent = this.fmt(dust);
+      el.title = `金尘 ${this.fmt(dust)}${isFinite(cap) ? ' / ' + this.fmt(cap) : ''}`;
+      if (isFinite(cap)) {
+        const pct = dust / cap;
+        el.style.color = pct >= 0.9 ? '#f87171' : (pct >= 0.7 ? '#fbbf24' : '#fde68a');
+      }
+    } catch (e) { el.textContent = '—'; }
   },
 
   /* ============ 数值格式化（中文习惯：万/亿 + gooboo K/M/B） ============ */
