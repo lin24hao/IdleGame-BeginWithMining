@@ -28,6 +28,30 @@
 var GB_PATCHNOTES = [
 
   {
+    version: '0.4.3',
+    date: '2026-10-04',
+    groups: [
+
+      { feature: 'school', sections: [
+        { type: 'added', label: '新增', items: [
+          '阵法（扫雷）核心算法：无猜扫雷，每局雷位可通过纯逻辑推理唯一确定，棋盘随等级扩大（F=8×8 起步，每升一级+1，封顶 15×15）',
+        ]},
+        { type: 'fixed', label: '修复', items: [
+          '演算子游戏中选中格子状态异常',
+          '藏经阁子游戏进行中退回到主页再进入，时间不再流逝',
+        ]},
+      ]},
+
+      { feature: 'meta', sections: [
+        { type: 'fixed', label: '修复', items: [
+          '时间跳过功能首次使用后无法再次触发',
+        ]},
+      ]},
+
+    ]
+  },
+
+  {
     version: '0.4.2',
     date: '2026-10-03',
     groups: [

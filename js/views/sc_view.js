@@ -227,11 +227,20 @@ var GB_SC_VIEW = {
     root.innerHTML = `
       <div class="gb-tabs" id="sc-tabs"></div>
       <div class="flex1 scroll-container" id="sc-content"></div>`;
-    root.addEventListener('click', (e) => this.onClick(e));
+    // 保存 handler 引用以便 unload 时移除，防止重复绑定
+    this._scClickHandler = (e) => this.onClick(e);
+    root.addEventListener('click', this._scClickHandler);
     this.render();
   },
   unload() {
     if (this.el) this.save();
+    // 移除 click 事件委托，防止多次 navigate 后累积多个 listener
+    if (this._scClickHandler && this.el) {
+      try { this.el.removeEventListener('click', this._scClickHandler); } catch (e) {}
+      this._scClickHandler = null;
+    }
+    // 清理游戏状态（防止 playing/mg 残留导致 render 走错分支）
+    if (this.playing) this.leaveSchool();
     this.stopLoop();
     this.stopAllIntervals();
     this.el = null;
@@ -243,7 +252,8 @@ var GB_SC_VIEW = {
     const el = e.target.closest('[data-sact]');
     if (!el) return;
     const [tag, val] = el.getAttribute('data-sact').split(':');
-    if (tag === 'tab') { this.setTab(val); return; }
+    // tab 切换：先退出当前游戏，否则 render() 会继续渲染 playing 界面
+    if (tag === 'tab') { if (this.playing) this.leaveSchool(); this.setTab(val); return; }
     if (tag === 'convert') { SC_RT.act('convertPass'); this.save(); this.render(); return; }
     if (tag === 'practice') { this.startPractice(val); return; }
     if (tag === 'study') { this.startStudy(val); return; }
@@ -258,18 +268,16 @@ var GB_SC_VIEW = {
     if (tag === 'leave') { this.leaveSchool(); return; }
     if (tag === 'mg-answer') { this.mgAnswer(); return; }
     if (tag === 'mg-art') { this.mgArtAnswer(+val); return; }
-    if (tag === 'mg-hist') { this.mgHistReveal(+val); return; }
+    if (tag === 'zf-cell') { this.mgZfClickCell(val); return; }
+    if (tag === 'zf-restart') { this.mgZfRestart(); return; }
+    if (tag === 'zf-hint') { this.mgZfHint(); return; }
+    if (tag === 'zf-surrender') { this.mgZfSurrender(); return; }
+    if (tag === 'zf-tool') { this.mg.zfTool = val; this.render(true); return; }
     if (tag === 'mg-chem-submit') { this.mgChemSubmit(); return; }
     if (tag === 'idiom-cell') { this.mgLitClickCell(val); return; }
     if (tag === 'idiom-choice') { this.mgLitClickChoice(parseInt(val)); return; }
     if (tag === 'idiom-next') { this.mgLitNext(); return; }
     if (this.playing) this.mgInlineClick(tag, val);
-  },
-  /* 小游戏内的内联点击（丢给各 minigame） */
-  mgInlineClick(tag, val) {
-    const mg = this.mg;
-    if (!mg || this.playing !== (mg.subject)) return;
-    if (tag === 'mg-lit-clear') { this.mgLitClear(); return; }
   },
   mgInputs() {},
 
@@ -785,6 +793,10 @@ var GB_SC_VIEW = {
   },
   renderPlayingClock() {
     const el = this.el; if (!el) return;
+    // 防御性修复：如果 playing 还活着但 _schoolInt 没了（被 navigate/unload 清了），重建计时器
+    if (this.playing && !this._schoolInt) {
+      this._schoolInt = setInterval(() => this.tickTimer(1), 1000);
+    }
     const clock = el.querySelector('#sc-clock');
     const scoreEl = el.querySelector('#sc-score');
     const canSeeNow = this.canSeeMinigame();
@@ -839,7 +851,7 @@ var GB_SC_VIEW = {
     this.mg = { subject: name };
     if (name === 'math') this.mgMathInit();
     else if (name === 'literature') this.mgLitInit();
-    else if (name === 'history') this.mgHistInit();
+    else if (name === 'history') this.mgZfInit();
     else if (name === 'art') this.mgArtInit();
     else if (name === 'chemistry') this.mgChemInit();
   },
@@ -847,7 +859,7 @@ var GB_SC_VIEW = {
     const name = this.mg.subject;
     if (name === 'math') return this.mgMathRender();
     if (name === 'literature') return this.mgLitRender();
-    if (name === 'history') return this.mgHistRender();
+    if (name === 'history') return this.mgZfRender();
     if (name === 'art') return this.mgArtRender();
     if (name === 'chemistry') return this.mgChemRender();
     return '';
@@ -942,6 +954,7 @@ var GB_SC_VIEW = {
     // 打乱显示顺序（但不影响可解性，因为穷举时考虑了所有排列）
     const shuffled = shuffleArray(combo.slice());
     this.mg.cards = shuffled.map(v => ({ v: v, frac: this._p24_fr(v, 1), mid: false }));
+    this.mg.originalCards = this.mg.cards.map(c => ({ ...c })); // 重置时恢复的初始牌面
     this.mg.sel = null;       // 选中的牌索引
     this.mg.op = null;        // 选中的运算符
     this.mg.steps = [];       // 操作步骤（用于回放/验证）
@@ -1001,14 +1014,18 @@ var GB_SC_VIEW = {
   /* ---- 交互（事件委托处理） ---- */
   mgInlineClick(tag, val) {
     const mg = this.mg;
-    if (!mg || mg.subject !== 'math') return;
+    // 通用检查：必须正在玩，且 mg 存在且 subject 匹配
+    if (!mg || !this.playing || this.playing !== mg.subject) return;
 
+    // mg-lit-clear 是文墨（literature）的操作，不受 subject='math' 限制
     if (tag === 'mg-lit-clear') { this.mgLitClear(); return; }
-    // 算24点的内联操作
-    if (tag === 'p24-card') { this._p24OnCard(+val); return; }
-    if (tag === 'p24-op') { this._p24OnOp(val); return; }
-    if (tag === 'p24-reset') { this._p24Reset(); return; }
-    if (tag === 'p24-next') { this._p24Next(); return; }
+    // 算24点（math）的内联操作
+    if (mg.subject === 'math') {
+      if (tag === 'p24-card') { this._p24OnCard(+val); return; }
+      if (tag === 'p24-op') { this._p24OnOp(val); return; }
+      if (tag === 'p24-reset') { this._p24Reset(); return; }
+      if (tag === 'p24-next') { this._p24Next(); return; }
+    }
   },
 
   _p24OnCard(i) {
@@ -1076,7 +1093,16 @@ var GB_SC_VIEW = {
     this.render(true);
   },
   _p24Reset() {
-    this._p24NewQuestion();
+    // 恢复当前题目的初始牌面，而不是抽新题
+    if (this.mg.originalCards) {
+      this.mg.cards = this.mg.originalCards.map(c => ({ ...c }));
+      this.mg.sel = null;
+      this.mg.op = null;
+      this.mg.steps = [];
+      this.mg.solved = false;
+    } else {
+      this._p24NewQuestion();
+    }
     this.render(true);
   },
   _p24Next() {
@@ -1261,121 +1287,251 @@ var GB_SC_VIEW = {
     }
   },
 
-  /* ---- 史卷（配对）history ---- */
-  mgHistInit() {
-    this.mg.elo = this.subj('history').currentGrade || 0;
-    this.mg.triesLeft = this.mode === 'exam' ? 1 : 0;
-    this.mg.moves = [];
-    this.mg.found = 0;
-    this.mg.revealNext = null;
-    this.mg.gameState = 0;
-    this.mg.gameTick = 0;
-    this.mgHistNewDates();
+  /* ---- 阵法（扫雷）history ---- */
+  mgZfInit() {
+    const g = this.subj('history').currentGrade || 0;
+    const mode = this.mode; // 'practice' | 'study' | 'exam'
+    const diff = (typeof zfGetDifficulty !== 'undefined'
+      ? zfGetDifficulty(g, mode === 'practice' ? 'study' : mode)
+      : { rows: 8, cols: 8, mines: 10, label: '初窥阵', tier: 'low', hasRowCol: false, has3x3: false, has4x4: false, isExam: false });
+    this.mg.zfDiff = diff;
+    this.mg.zfTier = diff.tier;
+    this.mg.zfTool = 'reveal';
+    this.mg.zfOver = null;
+    this.mg.zfScoreMultiplier = (typeof tierScoreMultiplier !== 'undefined' ? tierScoreMultiplier(diff) : 1);
+    this.mgZfNewGame();
   },
-  mgHistMaxTicks() { return this.mode === 'exam' ? 300 : 350; },
-  mgHistRevealTime() { return Math.ceil(80 / (this.mg.elo + 3)); },
-  mgHistNewDates() {
-    const digitAmount = Math.ceil(this.mg.elo / 3 + 1);
-    const fakeAmount = Math.round(this.mg.elo + 2 - digitAmount);
-    const realDates = [];
-    while (realDates.length < 5) {
-      const num = randomInt(Math.pow(10, digitAmount - 1), Math.pow(10, digitAmount) - 1).toString();
-      if (!realDates.includes(num)) realDates.push(num);
-    }
-    this.mg.realDates = realDates;
-    const fakeDates = [];
-    while (fakeDates.length < fakeAmount) {
-      const realIndex = randomInt(0, 4);
-      const fakeIndex = randomInt(0, digitAmount - 1);
-      const realDigit = parseInt(realDates[realIndex].substring(fakeIndex, fakeIndex + 1));
-      let fakeDigit = randomInt(0, fakeIndex > 0 ? 8 : 7);
-      if (fakeIndex <= 0) fakeDigit++;
-      if (fakeDigit >= realDigit) fakeDigit++;
-      const num = setCharAt(realDates[realIndex], fakeIndex, fakeDigit);
-      if (!realDates.includes(num) && !fakeDates.includes(num)) fakeDates.push(num);
-    }
-    this.mg.dates = shuffleArray([].concat(realDates, realDates, fakeDates)).map((el, id) =>
-      ({ year: el, seen: false, done: false, reveal: 0, id }));
-    this.mg.found = 0;
-    this.mg.gameState = 1;
-    this.mg.gameTick = 0;
-    this.mgHistStopTicker();
-    this.mg._histInterval = setInterval(() => this.mgHistRevealTick(), 100);
+  mgZfNewGame() {
+    const diff = this.mg.zfDiff;
+    const res = (typeof zfNewGame !== 'undefined' ? zfNewGame : (d, r, c) => ({
+      board: Array.from({length: d.rows}, (_, r) => Array.from({length: d.cols}, (_, c) => ({mine:false,revealed:false,flagged:false,adjMines:0,r,c}))),
+      difficulty: d
+    }))(diff, Math.floor(diff.rows / 2), Math.floor(diff.cols / 2));
+    this.mg.zfBoard = res.board;
+    this.mg.zfRows = diff.rows;
+    this.mg.zfCols = diff.cols;
+    this.mg.zfOver = null;
+    this.render(true);
   },
-  mgHistRevealTick() {
-    this.mg.dates.forEach((e, i) => { if (e.reveal > 0) { e.reveal--; } });
-    this.mgHistUpdateTimer(-1);
-  },
-  mgHistReveal(id) {
-    if (id !== null && this.mg.gameState === 1) {
-      if (this.mg.revealNext === null) { this.mg.revealNext = id; }
-      else if (this.mg.revealNext !== id) {
-        if (this.mg.dates[this.mg.revealNext].year === this.mg.dates[id].year) {
-          this.mg.dates[this.mg.revealNext].done = true;
-          this.mg.dates[id].done = true;
-          this.mg.found++;
-          this.score++;
-          this.updateScore(this.score);
-          if (this.mg.found >= 5) {
-            this.mgHistStopTicker();
-            this.mg.gameState = 2;
-            const self = this;
-            setTimeout(() => this.mgHistStartNext(), 5000);
-          }
-        } else {
-          let mistakes = 0;
-          if (this.mg.dates[this.mg.revealNext].seen) mistakes++; else this.mg.dates[this.mg.revealNext].seen = true;
-          if (this.mg.dates[id].seen) mistakes++; else this.mg.dates[id].seen = true;
-          if (mistakes > 0) this.mgHistUpdateTimer(mistakes * -50);
-          this.mg.dates[this.mg.revealNext].reveal = this.mgHistRevealTime();
-          this.mg.dates[id].reveal = this.mgHistRevealTime();
-        }
-        this.mg.revealNext = null;
+  mgZfClickCell(val) {
+    if (this.mg.zfOver) return;
+    const [r, c] = val.split(',').map(Number);
+    const board = this.mg.zfBoard;
+    const cell = board[r] && board[r][c];
+    if (!cell) return;
+    if (cell.revealed) return;
+
+    if (this.mg.zfTool === 'reveal') {
+      if (cell.flagged) return;
+      // 揭开
+      if (cell.mine) {
+        cell.revealed = true;
+        // 失败：揭开所有雷
+        if (typeof zfRevealAllMines !== 'undefined') zfRevealAllMines(board, this.mg.zfRows, this.mg.zfCols);
+        this.mg.zfOver = 'lose';
         this.render(true);
+        if (this.mode === 'exam') this.stop('history');
+        return;
+      }
+      if (typeof zfRevealCellInternal !== 'undefined') {
+        zfRevealCellInternal(board, this.mg.zfRows, this.mg.zfCols, r, c);
+      } else {
+        cell.revealed = true;
+      }
+    } else {
+      // 插旗 / 取消
+      cell.flagged = !cell.flagged;
+    }
+
+    // 检查胜利
+    if (typeof zfCheckWin !== 'undefined' && zfCheckWin(board, this.mg.zfRows, this.mg.zfCols)) {
+      this.mg.zfOver = 'win';
+      const addScore = this.mg.zfScoreMultiplier;
+      this.score += addScore;
+      this.updateScore(this.score);
+      this.render(true);
+      // 考试模式胜利直接退出；研习模式胜利 → 自动开下一局（类似 idiom-next）
+      if (this.mode === 'exam') {
+        this.stop('history');
+      } else {
+        // 研习：显示胜利画面 → 等玩家点"再来一局"（底部按钮），不自动开
+      }
+      return;
+    }
+
+    this.render(true);
+  },
+  mgZfRestart() {
+    if (confirm('重新开局？当前进度丢失')) {
+      this.mg.zfOver = null;
+      this.mgZfNewGame();
+    }
+  },
+  mgZfHint() {
+    if (this.mg.zfOver) return;
+    const pass = SC_CUR.value('school_examPass') || 0;
+    if (pass < 1) {
+      // 显示考签不足 toast（用简单 alert 或找现有 toast）
+      console.warn('阵法提示：考签不足（需要 1 张，当前 ' + pass + '）');
+      return;
+    }
+    // 消费 1 考签
+    SCTORE.dispatch('currency/spend',
+      { feature: 'school', name: 'examPass', amount: 1 },
+      { root: true }
+    );
+    // 获取提示
+    let hint = null;
+    if (typeof zfGetHint !== 'undefined') {
+      hint = zfGetHint(this.mg.zfBoard, this.mg.zfRows, this.mg.zfCols, this.mg.zfDiff);
+    }
+    if (!hint) {
+      console.warn('阵法提示：暂时推不出');
+      return;
+    }
+    // 应用提示：雷 = 自动插旗；安全 = 自动揭开
+    if (hint.type === 'mine') {
+      this.mg.zfBoard[hint.r][hint.c].flagged = true;
+    } else {
+      // 揭开安全格
+      if (typeof zfRevealCellInternal !== 'undefined') {
+        zfRevealCellInternal(this.mg.zfBoard, this.mg.zfRows, this.mg.zfCols, hint.r, hint.c);
+      }
+    }
+    // 胜利检查
+    if (typeof zfCheckWin !== 'undefined' && zfCheckWin(this.mg.zfBoard, this.mg.zfRows, this.mg.zfCols)) {
+      this.mg.zfOver = 'win';
+      this.score += this.mg.zfScoreMultiplier;
+      this.updateScore(this.score);
+    }
+    this.render(true);
+  },
+  mgZfSurrender() {
+    if (this.mg.zfOver) return;
+    if (confirm('放弃本局？当前得分不计入')) {
+      this.mg.zfOver = 'surrender';
+      this.render(true);
+      // 放弃 = 退出当前研习/考试
+      if (this.mode === 'exam') {
+        this.stop('history');
+      } else {
+        // 研习也退出（放弃就是不想玩了）
+        this.stop('history');
       }
     }
   },
-  mgHistUpdateTimer(diff) {
-    this.mg.gameTick -= diff;
-    this.updateTimer(Math.max(0, Math.ceil((this.mgHistMaxTicks() - this.mg.gameTick) / 10)));
-    if (this.mg.gameTick >= this.mgHistMaxTicks()) {
-      this.mgHistStopTicker();
-      this.mg.gameState = 2;
-      const self = this;
-      setTimeout(() => this.mgHistStartNext(), 5000);
+  mgZfRender() {
+    const diff = this.mg.zfDiff;
+    const board = this.mg.zfBoard;
+    const rows = this.mg.zfRows, cols = this.mg.zfCols;
+    const tool = this.mg.zfTool;
+    const over = this.mg.zfOver;
+
+    // 列标注（中档+高档）
+    let colLabelsHtml = '';
+    if (diff.hasRowCol) {
+      let row = '<div class="zf-label-row">';
+      row += '<div class="zf-label-corner"></div>';
+      for (let c = 0; c < cols; c++) {
+        row += `<div class="zf-label-cell zf-col-label">${board._colSums ? board._colSums[c] : ''}</div>`;
+      }
+      row += '</div>';
+      colLabelsHtml = row;
     }
-  },
-  mgHistStartNext() {
-    if (this.mode === 'practice') { this.mg.triesLeft++; }
-    else if (this.mg.triesLeft <= 0 || (this.mode === 'exam' && this.score >= this.subj('history').scoreGoal)) {
-      this.stop('history');
-      return;
-    } else { this.mg.triesLeft--; }
-    this.mg.gameState = 0;
-    this.mg.gameTick = 0;
-    this.mgHistNewDates();
-    this.render(true);
-  },
-  mgHistStopTicker() { if (this.mg._histInterval) { clearInterval(this.mg._histInterval); this.mg._histInterval = null; } },
-  mgHistRender() {
-    if (this.mg.gameState === 0) {
-      return `<div class="sc-mg-reset">${this.subjDesc('history_placeholder') ? '新局' : '新局'}</div>`;
+
+    // 行标注 + 棋盘
+    let boardRowsHtml = '';
+    for (let r = 0; r < rows; r++) {
+      let rowHtml = '<div class="zf-row">';
+      if (diff.hasRowCol) {
+        rowHtml += `<div class="zf-label-cell zf-row-label">${board._rowSums ? board._rowSums[r] : ''}</div>`;
+      }
+      for (let c = 0; c < cols; c++) {
+        const cell = board[r][c];
+        let display = '';
+        let cls = 'zf-cell';
+        if (cell.flagged) { display = '🚩'; cls += ' flagged'; }
+        else if (!cell.revealed) { cls += ' hidden'; }
+        else if (cell.mine) { display = '💥'; cls += ' mine'; }
+        else if (cell.adjMines > 0) { display = cell.adjMines; cls += ' revealed'; }
+        else { cls += ' revealed zero'; }
+        rowHtml += `<div class="${cls}" data-sact="zf-cell:${r},${c}">${display}</div>`;
+      }
+      rowHtml += '</div>';
+      boardRowsHtml += rowHtml;
     }
-    const maxCols = Math.ceil(Math.sqrt(this.mg.dates.length / 2) * 2);
-    const cells = this.mg.dates.map(it => {
-      const ini = this.mgInterp(it);
-      return `<div class="sc-hist-cell" data-sact="mg-hist:${it.id}" style="width:${Math.floor(640 / maxCols)}px">
-        ${ini}</div>`;
-    }).join('');
-    return `<div class="sc-hist-grid" style="grid-template-columns:repeat(${maxCols}, 1fr)">${cells}</div>`;
-  },
-  mgInterp(it) {
-    if (!it.done) {
-      const hidden = (it.reveal > 0 || it.id === this.mg.revealNext || this.mg.gameState === 2);
-      if (!hidden) return `这是【${it.year}】`;
-      return `<span class="sc-cover ${it.seen ? 'warn' : ''}">${it.seen ? this.icon('mdi-eye', 22) : this.icon('mdi-help', 22)}</span>`;
+
+    // 宫格标注（高档）
+    let grid3x3Html = '', grid4x4Html = '';
+    if (diff.has3x3 && board._grid3x3) {
+      const g = board._grid3x3;
+      // 3x3 宫标注：放在每个宫的右上角
+      for (let gr = 0; gr < g.div; gr++) {
+        for (let gc = 0; gc < g.div; gc++) {
+          const cx = gc * g.colsPerGrid + g.colsPerGrid - 0.5; // 居中于宫右上角
+          const cy = gr * g.rowsPerGrid + 0.5;
+          grid3x3Html += `<div class="zf-grid-label zf-3x3-label" style="grid-column:${cx};grid-row:${cy}">${g.labelRows[gr][gc]}</div>`;
+        }
+      }
     }
-    return `<span class="sc-done">${this.icon('mdi-check-bold', 24)}</span>`;
+    if (diff.has4x4 && board._grid4x4) {
+      const g = board._grid4x4;
+      for (let gr = 0; gr < g.div; gr++) {
+        for (let gc = 0; gc < g.div; gc++) {
+          const cx = gc * g.colsPerGrid + g.colsPerGrid - 0.5;
+          const cy = gr * g.rowsPerGrid + 0.5;
+          grid4x4Html += `<div class="zf-grid-label zf-4x4-label" style="grid-column:${cx};grid-row:${cy}">${g.labelRows[gr][gc]}</div>`;
+        }
+      }
+    }
+
+    // 棋盘
+    const boardStyle = `grid-template-columns:${diff.hasRowCol ? 'auto ' : ''}repeat(${cols}, minmax(0, 40px)); width: max-content`;
+    const boardHtml = `<div class="zf-board-wrap">
+      ${colLabelsHtml}
+      <div class="zf-board" style="${boardStyle}">
+        ${boardRowsHtml}
+        ${grid3x3Html}
+        ${grid4x4Html}
+      </div>
+    </div>`;
+
+    // 顶部档次信息
+    const gradeStr = typeof formatGrade !== 'undefined' ? formatGrade(this.subj('history').currentGrade || 0) : 'F';
+    const labelStr = diff.label + '（' + rows + '×' + cols + '，' + diff.mines + ' 雷）';
+
+    // 底部控制栏
+    let bottomHtml = '';
+    if (!over) {
+      bottomHtml = `<div class="zf-toolbar">
+        <button class="zf-btn zf-surrender-btn" data-sact="zf-surrender">🚪 放弃</button>
+        <button class="zf-btn zf-restart-btn" data-sact="zf-restart">🔄 重新开局</button>
+        <span class="zf-toolbar-right">
+          <button class="zf-btn zf-hint-btn" data-sact="zf-hint">🧠 提示（1考签）</button>
+          <button class="zf-btn zf-tool-btn ${tool==='reveal'?'active':''}" data-sact="zf-tool:reveal">✋ 揭开</button>
+          <button class="zf-btn zf-tool-btn ${tool==='flag'?'active':''}" data-sact="zf-tool:flag">🚩 插旗</button>
+        </span>
+      </div>`;
+    } else {
+      let resultMsg = '';
+      if (over === 'win') resultMsg = '🎉 胜利！+' + this.mg.zfScoreMultiplier + ' 分';
+      else if (over === 'lose') resultMsg = '💥 挖到雷了';
+      else resultMsg = '👋 已放弃';
+      bottomHtml = `<div class="zf-toolbar">
+        <div class="zf-over-msg ${over}">${resultMsg}</div>
+        <button class="zf-btn zf-restart-btn" data-sact="zf-restart">🔄 再来一局</button>
+      </div>`;
+    }
+
+    return `<div class="zf-wrap">
+      <div class="zf-header">
+        <span class="zf-grade">品阶 ${gradeStr}</span>
+        <span class="zf-tier-label">${labelStr}</span>
+        ${this.mode === 'exam' ? '<span class="zf-exam-tag">考试中</span>' : ''}
+      </div>
+      ${boardHtml}
+      ${bottomHtml}
+    </div>`;
   },
 
   /* ---- 绘卷（调色）art ---- */
@@ -1677,7 +1833,8 @@ var GB_TIME_SKIP = {
 
   /* 打开弹窗 */
   open() {
-    if (this._dlg) { this.close(); return; }
+    // 先关旧的（如果还在），再新开
+    this.close();
     this._minute = this._minute || 5;
     this._dlg = document.createElement('div');
     this._dlg.id = 'gb-time-skip-dlg';
