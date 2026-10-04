@@ -170,7 +170,14 @@ const SC_STORE = {
       let bonusDustGain = 0;
 
       if (o.mode === 'study' && subject.currentGrade >= subject.grade) {
-        const newProgress = Math.max((score - (subject.currentGrade <= 0 ? 0 : 1)) * 0.2 + subject.progress, 0);
+        let newProgress;
+        if (o.subject === 'math') {
+          // 数学：每 5 题 = 1 progress（简化直算）
+          newProgress = Math.max(o.score * 0.2 + subject.progress, 0);
+        } else {
+          // 其他学科：保持原归一化逻辑
+          newProgress = Math.max((score - (subject.currentGrade <= 0 ? 0 : 1)) * 0.2 + subject.progress, 0);
+        }
         if (newProgress >= 1) {
           gradePlus = true;
           const newGrade = subject.grade + 1;

@@ -333,7 +333,7 @@ const SC_MODULE = {
   /* 五学科 + 五类书籍初始化 */
   init() {
     for (const [key, elem] of Object.entries({
-      math: { scoreGoal: 5 },
+      math: { scoreGoal: 3 },
       literature: { unlock: 'scLiteratureSubfeature', scoreGoal: 8 },
       history: { unlock: 'scHistorySubfeature', scoreGoal: 8 },
       art: { unlock: 'scArtSubfeature', scoreGoal: 10 },

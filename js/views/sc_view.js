@@ -265,7 +265,16 @@ var GB_SC_VIEW = {
     if (tag === 'feat') { this._libFeature = val; this.render(); return; }
     // --- 金尘时间跳过（委托给全局 GB_TIME_SKIP） ---
     if (tag === 'openTs') { GB_TIME_SKIP && GB_TIME_SKIP.open(); return; }
-    if (tag === 'leave') { this.leaveSchool(); return; }
+    if (tag === 'leave') {
+      if (this.mode === 'study' && this.score > 0) {
+        // 研习中途退出 = 结算当前得分（自动加 pointsTotal + progress）
+        this.finishSchool(this.score);
+      } else {
+        this.leaveSchool();
+        this.render();
+      }
+      return;
+    }
     if (tag === 'mg-answer') { this.mgAnswer(); return; }
     if (tag === 'mg-art') { this.mgArtAnswer(+val); return; }
     if (tag === 'zf-cell') { this.mgZfClickCell(val); return; }
@@ -445,7 +454,7 @@ var GB_SC_VIEW = {
           <button class="sc-gbtn ${grade <= 0 ? 'disabled' : ''}" data-sact="gradeMinus:${name}" ${grade <= 0 ? 'disabled' : ''}>${this.icon('mdi-step-backward', 16)}</button>
           <div class="sc-grade ${colored}">${this.gradeStr(grade)}</div>
           <button class="sc-gbtn ${isMax ? 'disabled' : ''}" data-sact="gradePlus:${name}" ${isMax ? 'disabled' : ''}>${this.icon('mdi-step-forward', 16)}</button>
-          ${isMax ? `<div class="sc-progress"><div class="sc-progress-fill" style="width:${Math.min(100, s.progress * 100)}%"></div></div>` : `<div class="sc-check">${this.icon('mdi-check', 16)}</div>`}
+          ${isMax ? `<div class="sc-progress"><div class="sc-progress-fill" style="width:${Math.min(100, s.progress * 100)}%"></div><span class="sc-progress-text">${Math.round(s.progress * (name === 'math' ? 5 : 10))}/${name === 'math' ? 5 : 10}</span></div>` : `<div class="sc-check">${this.icon('mdi-check', 16)}</div>`}
         </div>
         ${segmentsHtml}
         <div class="sc-points">${this.T('totalPoints')} ${this.fmt(s.pointsTotal)}${crown ? `<span class="sc-crown">${this.icon('mdi-crown', crown.size)}</span>` : ''}</div>
@@ -456,7 +465,7 @@ var GB_SC_VIEW = {
             ${this.icon('mdi-ticket-account', 14)}${this.T('takeExam')}</button>
         </div>
         <div class="sc-fine">
-          ${this.T('studyTime').replace('{0}', this.fmtTime(this._studyTime(name)))}
+          <span>研习时限：不限时</span>
           ${this.T('examTime').replace('{0}', this.fmtTime(this._examTime(name)))}
           ${this.T('takeExamDescription').replace('{0}', this.fmtTime(this._examTime(name))).replace('{1}', this.fmt(Math.round(SCHOOL_EXAM_DUST_MIN * this.safe(() => SC_RT.getters.dustMult, 1)))).replace('{2}', this.fmt(dustMax)).replace('{3}', this.fmt(s.scoreGoal))}
           ${dustFull ? `<span class="sc-warn">${this.T('examDustFull')}</span>` : ''}
@@ -739,12 +748,10 @@ var GB_SC_VIEW = {
   },
   startStudy(name) {
     this.stopAllIntervals();
-    this.timer = this.customTimer.includes(name) ? 0 : (this._studyTime(name) + 1);
+    this.timer = 0;  // 研习永远无限时间
     this.score = 0; this.playing = name; this.mode = 'study';
     this.initMinigame(name);
-    if (!this.customTimer.includes(name)) {
-      this._schoolInt = setInterval(() => this.tickTimer(1), 1000);
-    }
+    // 研习不启动 ticker（无限时间）
     this.render();
   },
   startExam(name) {
@@ -765,6 +772,7 @@ var GB_SC_VIEW = {
   },
   tickTimer(seconds) {
     if (this.playing === null) return;
+    if (this.mode === 'study') return;  // 研习无限时间，不扣
     if (this.mode === 'practice') this.timer += seconds;
     else this.timer -= seconds;
     if (this.timer <= 0) this.finishSchool();
@@ -794,14 +802,15 @@ var GB_SC_VIEW = {
   renderPlayingClock() {
     const el = this.el; if (!el) return;
     // 防御性修复：如果 playing 还活着但 _schoolInt 没了（被 navigate/unload 清了），重建计时器
-    if (this.playing && !this._schoolInt) {
+    // 但研习模式不重建（研习无限时间）
+    if (this.playing && this.mode !== 'study' && !this._schoolInt) {
       this._schoolInt = setInterval(() => this.tickTimer(1), 1000);
     }
     const clock = el.querySelector('#sc-clock');
     const scoreEl = el.querySelector('#sc-score');
     const canSeeNow = this.canSeeMinigame();
     const cont = el.querySelector('#sc-minigame');
-    if (clock) clock.textContent = this.displayTimer() + (this.customTimer.includes(this.playing) ? '' : 's');
+    if (clock) clock.textContent = this.mode === 'study' ? '∞' : (this.displayTimer() + (this.customTimer.includes(this.playing) ? '' : 's'));
     if (scoreEl) scoreEl.textContent = Math.floor(this.score) + (this.mode === 'exam' && this.playing ? ' / ' + this.subj(this.playing).scoreGoal : '');
     const hint = el.querySelector('#sc-minigame-hint');
     if (cont && !canSeeNow) {
@@ -827,18 +836,21 @@ var GB_SC_VIEW = {
            this.mode === 'practice';
   },
   /* math 单独时限 ×3，其他学科用全局默认 */
-  _studyTime(name) { return name === 'math' ? SCHOOL_STUDY_TIME * 3 : SCHOOL_STUDY_TIME; },
-  _examTime(name)  { return name === 'math' ? SCHOOL_EXAM_TIME * 3 : SCHOOL_EXAM_TIME; },
+  _studyTime(name) { return name === 'math' ? SCHOOL_STUDY_TIME * 2 : SCHOOL_STUDY_TIME; },
+  _examTime(name)  { return name === 'math' ? 300 : SCHOOL_EXAM_TIME; },
   renderPlayingLayout() {
     const st = this.state;
     const subjGoal = this.subj(this.playing) ? this.subj(this.playing).scoreGoal : 1;
+    // 提示：研习中得分 ≥ 5 就能加 1 progress（每 5 分 = 1 progress）
+    const canTakeExam = this.mode === 'study' && this.score >= 5;
     return `
       <div class="sc-playing">
         <div class="sc-scoreboard">
           <span class="sc-chip">${this.icon('mdi-timer', 16)}<span id="sc-clock">${this.displayTimer()}</span></span>
           <span class="sc-chip">${this.icon('mdi-marker-check', 16)}<span id="sc-score">${Math.floor(this.score)}${this.mode === 'exam' ? ' / ' + subjGoal : ''}</span></span>
-          ${this.mode === 'practice' ? `<button class="sc-btn error" data-sact="leave">${this.T('leave')}</button>` : ''}
+          ${this.mode !== 'exam' ? `<button class="sc-btn ghost" data-sact="leave">${this.icon('mdi-exit-to-app',14)} 退出研习</button>` : ''}
         </div>
+        ${canTakeExam ? `<div class="sc-exam-ready">${this.icon('mdi-check-circle',16)} 得分不错！退出研习结算进度后，进度条满 10/10 就能参加考试</div>` : ''}
         <div class="sc-mg-hint" id="sc-minigame-hint" ${this.canSeeMinigame() ? 'style="display:none"' : ''}>
           ${this.mode === 'exam' ? this.T('beginExam') : this.T('start')}
         </div>
@@ -927,6 +939,12 @@ var GB_SC_VIEW = {
   /* ---- 题库生成（第一次调用时懒生成并缓存） ---- */
   _p24BuildBank() {
     if (this._p24Bank) return this._p24Bank;
+    // 先试 localStorage 缓存（页面刷新也不丢）
+    try {
+      const cached = localStorage.getItem('sc_p24_bank');
+      if (cached) { this._p24Bank = JSON.parse(cached); return this._p24Bank; }
+    } catch (e) {}
+    // 首次：穷举 + DFS 验证（~750ms）
     const bank = [];
     for (let a = 1; a <= 13; a++)
       for (let b = a; b <= 13; b++)
@@ -934,6 +952,8 @@ var GB_SC_VIEW = {
           for (let d = c; d <= 13; d++)
             if (this._p24_canSolve([a, b, c, d])) bank.push([a, b, c, d]);
     this._p24Bank = bank;
+    // 持久化（下次进 math 直接 0ms）
+    try { localStorage.setItem('sc_p24_bank', JSON.stringify(bank)); } catch (e) {}
     return bank;
   },
 
@@ -1106,6 +1126,11 @@ var GB_SC_VIEW = {
     this.render(true);
   },
   _p24Next() {
+    // 考试/研习完成 → 结算
+    if (this.score >= this.subj(this.playing).scoreGoal) {
+      this.finishSchool(this.score);
+      return;
+    }
     // 无论是否算出，都可以跳下一题
     this._p24NewQuestion();
     this.render(true);
