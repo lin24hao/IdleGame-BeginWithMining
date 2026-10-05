@@ -31,7 +31,9 @@ var GB_MODULES = {
     farm: 'farm',
     dao: 'dao',
     relic: 'rel',
-    treasure: 'treasure',
+    treasure: 'xq',   // 仙器模块注册的 keyPrefix 是 xq（不是 treasure）
+    school: 'school',
+    ruin: 'ruin',
     // gallery（gooboo 画廊）暂不移植 — gallery effect 变成 no-op
   },
   resetting: false,
@@ -194,8 +196,14 @@ var GB_MODULES = {
   /* ---------- 跨模块 MULT 路由 ---------- */
   /* gooboo 全局 mult/setMult 的等价物：
      treasure effect 要给 miningDamage 加 mult，调用：
-       GB_MODULES.multSetMult({ feature: 'mining', name: 'miningDamage', key: 'treasure', value: 1.5 })
-     自动路由到 lm 模块的 MULT */
+       GB_MODULES.multSetMult({ feature: 'mining', name: 'lmDamage', key: 'treasure', value: 1.5 })
+     自动路由到 lm 模块的 MULT
+     
+     各模块 MULT 结构不统一：
+       lm/vi/ho/fa/sc/treasure → MULT.items
+       dao → MULT.values
+       relic → REL_MULT.values
+     统一用 _multItem() 取实际容器 */
   _featureToMult(feature) {
     const prefix = this._featureMap[feature];
     if (!prefix) return null;
@@ -203,32 +211,56 @@ var GB_MODULES = {
     if (!mod || !mod.core || !mod.core.MULT) return null;
     return mod.core.MULT;
   },
+  _multItemGetter(multObj, name) {
+    if (!multObj) return null;
+    if (multObj.items && multObj.items[name]) return multObj.items[name];
+    if (multObj.values && multObj.values[name]) return multObj.values[name];
+    return null;
+  },
   multSetMult(o) {
     const m = this._featureToMult(o.feature); if (!m) return;
-    if (typeof m.setMult === 'function') m.setMult({ name: o.name, key: o.key, value: o.value });
-    else if (!m.values[o.name]) m.values[o.name] = { base: 1, mult: o.value, bonus: 0 };
-    else m.values[o.name].mult = o.value;
+    if (typeof m.setMult === 'function') { m.setMult({ name: o.name, key: o.key, value: o.value }); return; }
+    // fallback：直接写 items 或 values（兼容不同模块的 MULT 结构）
+    if (!m.items && !m.values) return;
+    const item = m.items ? (m.items[o.name] || (m.items[o.name] = { multValues: {}, bonusValues: {}, baseValues: {} }))
+                        : (m.values ? (m.values[o.name] || (m.values[o.name] = { multValues: {}, bonusValues: {}, baseValues: {} })) : null);
+    if (!item) return;
+    item.multValues[o.key] = o.value;
+    if (typeof m._recompute === 'function') m._recompute(item);
   },
   multSetBase(o) {
     const m = this._featureToMult(o.feature); if (!m) return;
-    if (typeof m.setBase === 'function') m.setBase({ name: o.name, key: o.key, value: o.value });
-    else if (!m.values[o.name]) m.values[o.name] = { base: o.value, mult: 1, bonus: 0 };
-    else m.values[o.name].base = o.value;
+    if (typeof m.setBase === 'function') { m.setBase({ name: o.name, key: o.key, value: o.value }); return; }
+    if (!m.items && !m.values) return;
+    const item = m.items ? (m.items[o.name] || (m.items[o.name] = { multValues: {}, bonusValues: {}, baseValues: {} }))
+                        : (m.values ? (m.values[o.name] || (m.values[o.name] = { multValues: {}, bonusValues: {}, baseValues: {} })) : null);
+    if (!item) return;
+    item.baseValues[o.key] = o.value;
+    if (typeof m._recompute === 'function') m._recompute(item);
   },
   multSetBonus(o) {
     const m = this._featureToMult(o.feature); if (!m) return;
-    if (typeof m.setBonus === 'function') m.setBonus({ name: o.name, key: o.key, value: o.value });
-    else if (!m.values[o.name]) m.values[o.name] = { base: 1, mult: 1, bonus: o.value };
-    else m.values[o.name].bonus = o.value;
+    if (typeof m.setBonus === 'function') { m.setBonus({ name: o.name, key: o.key, value: o.value }); return; }
+    if (!m.items && !m.values) return;
+    const item = m.items ? (m.items[o.name] || (m.items[o.name] = { multValues: {}, bonusValues: {}, baseValues: {} }))
+                        : (m.values ? (m.values[o.name] || (m.values[o.name] = { multValues: {}, bonusValues: {}, baseValues: {} })) : null);
+    if (!item) return;
+    item.bonusValues[o.key] = o.value;
+    if (typeof m._recompute === 'function') m._recompute(item);
   },
   multRemoveKey(o) {
     const m = this._featureToMult(o.feature); if (!m) return;
-    if (typeof m.removeKeyAnywhere === 'function') m.removeKeyAnywhere();
-    // 简化：直接清掉 mult/bonus，保留 base
-    if (m.values[o.name]) {
-      m.values[o.name].mult = 1;
-      m.values[o.name].bonus = 0;
-    }
+    if (typeof m.removeKeyAnywhere === 'function') { m.removeKeyAnywhere(o.key); return; }
+    // 防御：m 可能没有 items/values 结构
+    if (!m.items && !m.values) return;
+    const item = this._multItemGetter(m, o.name);
+    if (!item) return;
+    try {
+      if (item.multValues) delete item.multValues[o.key];
+      if (item.bonusValues) delete item.bonusValues[o.key];
+      if (item.baseValues) delete item.baseValues[o.key];
+    } catch (e) { /* ignore */ }
+    if (typeof m._recompute === 'function') { try { m._recompute(item); } catch(e) {} }
   },
   multInit(o) {
     const m = this._featureToMult(o.feature); if (!m) return;

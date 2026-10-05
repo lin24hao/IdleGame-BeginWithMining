@@ -839,6 +839,15 @@ const LM_RT = {
         'currency/gainMultName': (feature, name) => CUR.gainMultName(feature + '_' + name),
         'currency/capMultName': (feature, name) => CUR.capMultName(feature + '_' + name),
         'currency/canAfford': (price, maxPrice) => CUR.canAfford(price, maxPrice),
+        'consumable/canAffordMultiple': (consumables) => {
+          if (!consumables) return true;
+          for (const key in consumables) {
+            if (consumables[key] <= 0) continue;
+            const val = CUR.value('lm_' + key);
+            if (val == null || val < consumables[key]) return false;
+          }
+          return true;
+        },
         'system/getRng': () => () => Math.random(),
         'lm/dwellerLimit': () => self.getters.dwellerLimit
       };

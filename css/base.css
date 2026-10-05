@@ -1083,14 +1083,11 @@ body {
 /* ============ 先天灵宝模块样式 ============ */
 .bg-progress { background: rgba(128,128,128,0.25); }
 
-/* Tab 栏 */
-.rel-tabs {
+/* ===== Relic.vue: v-tabs（grow show-arrows）===== */
+.rel-tabs-root {
   display: flex;
-  gap: 2px;
-  background: var(--bg-card);
-  border-radius: 10px;
-  padding: 4px;
-  margin-bottom: 10px;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 4px;
 }
 .rel-tab {
   flex: 1;
@@ -1098,36 +1095,761 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-dim);
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-bottom: 2px solid transparent;
   cursor: pointer;
   transition: all 0.15s;
+  position: relative;
 }
-.rel-tab:hover {
-  color: var(--text-main);
-  background: rgba(255,255,255,0.05);
-}
+.rel-tab:hover { color: var(--text-main); background: rgba(255,255,255,0.03); }
 .rel-tab.active {
   color: var(--text-main);
-  background: var(--bg-card-elevated, rgba(130,177,255,0.15));
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  border-bottom-color: var(--clr-accent, #4f8cff);
+  background: rgba(255,255,255,0.04);
 }
-.rel-tab svg { opacity: 0.9; }
-
-.rel-tab-body {
-  min-height: 200px;
+.rel-tab-badge-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #f43f5e;
+  margin-right: 4px;
 }
 
-/* 响应式：窄屏时 2 列变 1 列 */
-@media (max-width: 700px) {
-  .rel-tab-body > div[style*="grid-template-columns"] {
-    grid-template-columns: 1fr !important;
-  }
+/* ===== RelicList.vue — Currency.vue (large) ===== */
+/* 100% 对齐 gooboo src/components/render/Currency.vue 的 scoped 样式 */
+.rel-currency-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 8px 4px 12px;
+}
+/* currency-container + render-currency-large: 380px 宽 / 44px 高 / 相对定位 */
+.rel-currency-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  border-radius: 4px;
+  padding: 8px;
+  gap: 8px;
+  color: #000;
+}
+.rel-currency-large {
+  width: 380px;
+  font-size: 16px;
+}
+/* 左侧 ring 图标 */
+.rel-currency-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.rel-currency-icon svg { width: 24px !important; height: 24px !important; color: #000; }
+/* currency-border: 2px solid white 包裹进度条 */
+.rel-currency-border {
+  flex: 1;
+  width: 100%;
+  border-radius: 4px;
+  overflow: visible;
+}
+/* 进度条主体 */
+.rel-currency-bar {
+  position: relative;
+  border-radius: 3px;
+}
+.rel-currency-bar-fill {
+  transition: width .3s ease;
+}
+/* currency-line 刻度竖线 */
+.rel-currency-line {
+  position: absolute;
+  bottom: 0;
+  border-left: 1px solid rgba(255,255,255,0.19);
+  border-right: 1px solid rgba(255,255,255,0.19);
+  pointer-events: none;
+}
+.rel-currency-line--small { height: 10px; }
+.rel-currency-line--medium { height: 16px; }
+.rel-currency-line--large { height: 24px; }
+/* 居中文字 currency-text text-center */
+.rel-currency-text {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  font-size: 13px;
+  font-weight: 700;
+  color: #000;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow: 0 0 2px rgba(255,255,255,0.8);
+}
+/* 底部标签 currency-labels */
+.rel-currency-labels {
+  position: absolute;
+  font-size: 12px;
+  bottom: -8px;
+  left: 40px;
+  right: 8px;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+.rel-currency-label {
+  border: 2px solid #FFFFFF;
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: #000;
+  font-weight: 600;
+}
+
+/* ===== Item.vue 外层 d-flex align-center ===== */
+.rel-items-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 4px;
+  padding-bottom: 8px;
+  gap: 4px;
+}
+.rel-item-root {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+/* ===== v-card 180×128 ===== */
+.rel-card {
+  position: relative;
+  width: 180px; height: 128px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 12px;
+  margin: 0 4px 12px;
+}
+@media (max-width: 600px) {
+  .rel-card { width: 112px; height: 96px; }
+  .rel-card-icon svg { width: 32px !important; height: 32px !important; }
+}
+
+/* ===== v-icon x-large（48px）===== */
+.rel-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== text-center ma-2 mb-n3（负 margin 紧贴）===== */
+.rel-card-name {
+  text-align: center;
+  margin: 8px 8px -12px;
+  font-size: 13px;
+  font-weight: bold;
+  color: #000;
+}
+
+/* ===== relic-feature-list 绝对定位 bottom:-12px right:4px ===== */
+.rel-feature-list {
+  position: absolute;
+  left: 0; right: 4px;
+  bottom: -12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.rel-feature-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  margin-right: 4px;
+  box-sizing: border-box;
+}
+.rel-feature-circle svg { width: 14px !important; height: 14px !important; }
+
+/* ===== relic-glyph-list 绝对定位 top:4px ===== */
+.rel-item-root .rel-card { position: relative; }
+.rel-item-root .rel-card .rel-feature-list { z-index: 2; }
+.rel-item-root .rel-card::before { content: ''; }
+.rel-item-root .rel-card .rel-feature-circle:last-child { margin-right: 0; }
+
+/* glyph chip 直接放在 card 里（因为 card 已经是 relative） */
+.rel-glyph-chip {
+  display: inline-flex;
+  align-items: flex-end;
+  height: 26px;
+  padding: 2px 2px 2px 4px;
+  margin: 0 4px 0 0;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+.rel-glyph-chip svg { width: 20px !important; height: 20px !important; }
+.rel-glyph-amount {
+  line-height: 11px; font-size: 11px; color: #000;
+}
+/* 因为 glyph-list 和 feature-list 都绝对定位在 card 里，改 card 为包含它们 */
+.rel-card .rel-glyph-chip { position: relative; }
+/* glyph 组容器 */
+.rel-card > .rel-glyph-list-group {
+  position: absolute; left: 0; right: 0; top: 4px;
+  display: flex; flex-wrap: wrap;
+}
+
+/* ===== active-box 占位 ===== */
+.rel-active-box {
+  width: 376px; height: 120px;
+  border-radius: 0 8px 8px 0;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+}
+@media (max-width: 600px) {
+  .rel-active-box { width: 240px; height: 88px; }
+}
+.rel-active-desc {
+  font-size: 16px;
+  text-align: center;
+  font-weight: 500;
+}
+.rel-active-formula {
+  font-size: 12px;
+  line-height: 14px;
+  opacity: 0.7;
+}
+.rel-active-bottom {
+  margin-top: auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.rel-active-btn {
+  padding: 6px 16px;
+  background: var(--clr-accent, #4f8cff);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.rel-active-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.rel-active-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+}
+
+/* ===== MuseumTab.vue ===== */
+.rel-museum-root { display: flex; gap: 0; }
+.rel-museum-left {
+  flex: 0 0 220px;
+  min-width: 180px;
+  padding: 4px;
+}
+@media (max-width: 768px) { .rel-museum-left { flex: 0 0 100%; } }
+.rel-museum-right {
+  flex: 1;
+  min-width: 0;
+  padding: 4px;
+}
+
+/* toolbar filter + modify */
+.rel-museum-toolbar {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+}
+.rel-filter-menu-wrap { position: relative; }
+.rel-filter-btn {
+  padding: 6px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-main);
+  display: flex; align-items: center; justify-content: center;
+}
+.rel-filter-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  min-width: 180px;
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.rel-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .1s;
+  color: var(--text-main);
+}
+.rel-filter-item:hover { background: rgba(255,255,255,0.06); }
+.rel-filter-item.active { background: rgba(79,140,255,0.15); color: var(--clr-accent); }
+.rel-filter-icon {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border-radius: 3px;
+}
+
+.rel-pedestal-modify {
+  padding: 6px 12px;
+  background: var(--clr-accent, #4f8cff);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex; align-items: center; gap: 4px;
+}
+.rel-pedestal-modify:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.rel-warn-banner {
+  margin: 6px;
+  padding: 6px 8px;
+  background: rgba(245,158,11,0.15);
+  border: 1px solid var(--clr-warning, #f59e0b);
+  border-radius: 4px;
+  color: var(--clr-warning, #f59e0b);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ===== RelicPedestal.vue ===== */
+.rel-pedestal-root {
+  display: flex;
+  align-items: center;
+  margin: 8px 0;
+  gap: 6px;
+}
+.rel-pedestal-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  padding: 2px;
+  outline: none;
+}
+.rel-pedestal-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.rel-pedestal-letter {
+  font-size: 24px;
+  line-height: 24px;
+  color: var(--text-main);
+}
+
+/* ===== GlyphBar.vue（精确复刻 gooboo）===== */
+.rel-glyphs-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 4px;
+}
+.rel-glyph-bar {
+  display: flex;
+  align-items: center;
+  margin: 4px;
+}
+/* 40×40 圆（rounded-circle + themeCss） */
+.rel-glyph-level {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #000;
+  flex-shrink: 0;
+  z-index: 1;
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 3px rgba(0,0,0,0.1);
+}
+/* v-progress-linear ml-n2（和圆重叠）height=32 :color */
+.rel-glyph-progress {
+  position: relative;
+  width: 200px; height: 32px;
+  margin-left: -8px; /* ml-n2 负 margin 重叠圆 */
+  background: rgba(128,128,128,0.15);
+  border-radius: 4px 0 0 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2px 0 2px 12px;
+  gap: 2px;
+  color: var(--text-main);
+  font-size: 12px;
+}
+.rel-glyph-progress::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: var(--rel-glyph-fill, 0%);
+  background: var(--glyph-color, #888);
+  opacity: 0.3;
+  transition: width .3s;
+}
+/* 32×32 侧色块（rounded-r-lg + themeCss） */
+.rel-glyph-side {
+  width: 32px; height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 8px 8px 0;
+  flex-shrink: 0;
+}
+.rel-glyph-side svg { color: #000; }
+
+/* GlyphBar 内部文本 */
+.rel-glyph-stat {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+}
+.rel-glyph-change { opacity: 0.7; }
+.rel-glyph-change svg { opacity: 0.7; }
+.rel-glyph-reset { text-decoration: line-through var(--clr-accent); }
+.rel-glyph-change-new {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+  z-index: 1;
+  color: var(--clr-accent, #4f8cff);
+  font-size: 12px;
+}
+.rel-glyph-empty {
+  position: relative; z-index: 1;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* 响应式 */
+@media (max-width: 600px) {
+  .rel-glyph-progress { width: 140px; font-size: 11px; }
+  .rel-glyph-level { width: 32px; height: 32px; font-size: 18px; }
+  .rel-glyph-side { width: 28px; height: 28px; }
+  .rel-currency-large { flex-wrap: wrap; padding: 8px 14px; }
+  .rel-card-name { font-size: 10px; margin: 4px 4px -8px; }
+}
+
+/* 通用 */
+.balloon-text-dynamic {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============ 灵宝碎片（Card 集卡系统，100% 对齐 gooboo Card.vue + CardItem.vue） ============ */
+
+/* Card.vue 顶栏 */
+.card-topbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px;
+}
+.card-pack-select {
+  font-size: 13px;
+  padding: 6px 10px;
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  outline: none;
+  min-width: 180px;
+}
+.card-buy-btn {
+  padding: 6px 14px;
+  background: var(--clr-accent, #4f8cff);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.card-buy-btn.small { padding: 4px 10px; font-size: 12px; }
+.card-buy-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* 货币 + feature chip 行 */
+.card-currency-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 4px;
+}
+.card-shiny-dust, .card-qingyuan {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--divider);
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.card-feature-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  font-size: 12px;
+  color: var(--text-main);
+}
+.card-feature-shiny {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: #38bdf8;
+  font-size: 11px;
+}
+
+/* 收藏面板（expansion panel） */
+.card-collections { margin: 8px 4px; }
+.card-panel {
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.card-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: var(--bg-card-elevated, rgba(255,255,255,0.03));
+}
+.card-panel-title { flex: 1; font-size: 14px; font-weight: 600; color: var(--text-main); }
+.card-panel-arrow { display: flex; align-items: center; transition: transform .2s; color: var(--text-dim); }
+.card-panel-body { padding: 4px 12px 12px; }
+.card-reward-title { font-size: 12px; color: var(--text-dim); margin: 4px 0; }
+.card-collection-reward { font-size: 12px; color: var(--text-main); margin: 2px 0; }
+
+.card-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 72px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: rgba(128,128,128,0.2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.card-chip-crown { background: #f59e0b; color: #000; }
+
+/* 卡片网格 */
+.card-items-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px -4px -4px;
+}
+
+/* ===== CardItem.vue（扑克牌式 120×168） ===== */
+.card-playing {
+  position: relative;
+  width: 120px;
+  height: 168px;
+  border: 3px solid black;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  margin: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  flex-shrink: 0;
+}
+.card-hidden {
+  width: 120px;
+  height: 168px;
+  border-radius: 8px;
+  margin: 4px;
+  background: var(--bg-card);
+  border: 2px dashed var(--divider);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .card-playing, .card-hidden { width: 80px; height: 112px; }
+}
+
+/* 标题条 */
+.card-playing-title {
+  width: 100%;
+  height: 32px;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 2px 4px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* 中间画布 */
+.card-playing-inner {
+  flex: 1;
+  padding: 8px 12px;
+  border-top: 2px solid black;
+  border-bottom: 2px solid black;
+  position: relative;
+}
+.card-playing-inner-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.card-playing-icon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 数量角标 */
+.card-playing-amount {
+  position: absolute;
+  opacity: 0.75;
+  font-size: 14px;
+  left: -13px;
+  top: -13px;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 8px;
+  line-height: 1;
+}
+
+/* 能力值圆（右上角） */
+.card-playing-power {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  right: -18px;
+  top: -26px;
+  border-radius: 50%;
+  border: 4px solid black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.card-playing-power-inner {
+  width: 20px;
+  height: 20px;
+  margin-left: -2px;
+  margin-top: -2px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: #000;
+}
+
+/* 底部条 */
+.card-playing-bottom {
+  width: 100%;
+  height: 12px;
+  padding-left: 4px;
+  font-size: 10px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-sizing: border-box;
+}
+
+/* feature 角标（右下角） */
+.card-feature-icon {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  height: 24px;
+  border-top-left-radius: 8px;
+  border-top: 2px solid black;
+  border-left: 2px solid black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 闪光动画 */
+@keyframes shiny-card {
+  0%   {opacity: 30%;}
+  10%  {opacity: 40%;}
+  20%  {opacity: 60%;}
+  30%  {opacity: 30%;}
+  40%  {opacity: 40%;}
+  50%  {opacity: 30%;}
+  60%  {opacity: 65%;}
+  70%  {opacity: 40%;}
+  80%  {opacity: 30%;}
+  90%  {opacity: 55%;}
+  100% {opacity: 30%;}
+}
+.card-shiny {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background: linear-gradient(25deg, #ffffffdd, #e0f0ffaa);
+  animation: shiny-card 10s linear infinite;
+  border-radius: 5px;
+  pointer-events: none;
 }
 
 /* ============ 全局基础组件（跨模块共用） ============ */

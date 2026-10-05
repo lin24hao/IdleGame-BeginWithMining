@@ -13,41 +13,60 @@ const RELIC_GLYPH_SPEED_BONUS = 0.75;
 const RELIC_GLYPH_SPEED_OVERCAP = 1.25;
 // SECONDS_PER_HOUR 由 lm_data.js 全局提供，此处不重复声明
 
-/* ============ MULT 子系统（简化版，对齐 lm_core 的 MULT API） ============ */
+/* ============ MULT 子系统（对齐 gooboo mult 语义） ============
+ * 最终值 = (baseValue + Σ baseValues) × Π multValues + Σ bonusValues
+ * base/mult/bonus 是缓存字段，兼容旧代码直接读字段（如 REL_CUR.cap、card_core）
+ * key 参数对应 gooboo 的 multKey —— 同名不同 key 的多来源按 gooboo 规则聚合 */
 const REL_MULT = {
-  values: {}, // name → { base, mult, bonus }
+  values: {},
 
   init(name, o) {
     if (!this.values[name]) {
-      this.values[name] = { base: (o && o.baseValue !== undefined ? o.baseValue : 1), mult: 1, bonus: 0 };
+      const baseValue = (o && o.baseValue !== undefined ? o.baseValue : 1);
+      this.values[name] = { baseValue, baseValues: {}, multValues: {}, bonusValues: {}, base: baseValue, mult: 1, bonus: 0 };
     }
   },
+  _ensure(name) {
+    if (!this.values[name]) this.init(name, {});
+    return this.values[name];
+  },
+  _recalc(v) {
+    let base = v.baseValue || 0, mult = 1, bonus = 0;
+    for (const k in v.baseValues) base += v.baseValues[k];
+    for (const k in v.multValues) mult *= v.multValues[k];
+    for (const k in v.bonusValues) bonus += v.bonusValues[k];
+    v.base = base; v.mult = mult; v.bonus = bonus;
+  },
   setMult(o) {
-    if (!this.values[o.name]) this.values[o.name] = { base: 1, mult: 1, bonus: 0 };
-    this.values[o.name].mult = o.value;
+    const v = this._ensure(o.name);
+    v.multValues[o.key || '_'] = o.value;
+    this._recalc(v);
   },
   setBase(o) {
-    if (!this.values[o.name]) this.values[o.name] = { base: 0, mult: 1, bonus: 0 };
-    this.values[o.name].base = o.value;
+    const v = this._ensure(o.name);
+    v.baseValues[o.key || '_'] = o.value;
+    this._recalc(v);
   },
   setBonus(o) {
-    if (!this.values[o.name]) this.values[o.name] = { base: 0, mult: 1, bonus: 0 };
-    this.values[o.name].bonus = o.value;
+    const v = this._ensure(o.name);
+    v.bonusValues[o.key || '_'] = o.value;
+    this._recalc(v);
   },
-  // 计算最终值（mult 型：base × mult + bonus；base 型：base + bonus × mult）
+  // 计算最终值：(baseValue + Σbase) × Πmult + Σbonus
   get(name, fallback) {
     const v = this.values[name];
     if (!v) return fallback !== undefined ? fallback : 1;
     return (v.base || 0) * (v.mult || 1) + (v.bonus || 0);
   },
-  // 清零所有由某 key 设置的值
+  // 清除某个 multKey 写入的所有值
   resetKey(key) {
     for (const n in this.values) {
-      if (this.values[n]._key === key) {
-        this.values[n].mult = 1;
-        this.values[n].base = 0;
-        this.values[n].bonus = 0;
-      }
+      const v = this.values[n];
+      let dirty = false;
+      if (v.multValues && key in v.multValues) { delete v.multValues[key]; dirty = true; }
+      if (v.baseValues && key in v.baseValues) { delete v.baseValues[key]; dirty = true; }
+      if (v.bonusValues && key in v.bonusValues) { delete v.bonusValues[key]; dirty = true; }
+      if (dirty) this._recalc(v);
     }
   },
 };
@@ -161,8 +180,13 @@ const REL_GLYPHS = {
   ]},
   // general（大道法则/灵宝自身）
   coin: { icon: 'mdi-circle-multiple', color: 'amber', effect: [
-    { name: 'currencyTreasureFragmentGain', type: 'mult', value: lvl => lvl * 0.2 + 1 },
+    { name: 'currencyXqFragmentGain', type: 'mult', value: lvl => lvl * 0.2 + 1 },
     { name: 'treasureSlots', type: 'base', value: lvl => lvl },
+  ]},
+  // school（藏经阁）—— gooboo book glyph；schoolBook/currencySchoolGoldenDustCap 与 sc 模块键名一致
+  book: { icon: 'mdi-book', color: 'beige', effect: [
+    { name: 'schoolBook', type: 'base', value: lvl => lvl * 2 },
+    { name: 'currencySchoolGoldenDustCap', type: 'base', value: lvl => lvl * 2500 },
   ]},
 };
 
@@ -174,18 +198,41 @@ const REL_ITEMS = {
   taiji: {
     feature: ['general'], icon: 'mdi-circle-outline', color: '#f59e0b',
     effect: lvl => [
-      { name: 'currencyRelPowerGain', type: 'mult', value: 1 + lvl * 0.1 },
+      { name: 'currencyRelicPowerGain', type: 'mult', value: 1 + lvl * 0.1 },
     ],
     glyph: () => ({}),
-    active: { cost: { power: 10 }, feature: 'general', params: () => [], description: () => ['发动太极之力，灵宝之力产出翻倍 10 秒'], formula: () => [], trigger: () => {}, disabled: () => false },
+    active: {
+      cost: { relic_power: 10 },
+      feature: 'general',
+      params: () => [],
+      description: () => ['发动太极之力，灵宝之力产出翻倍 10 秒'],
+      formula: () => ['10秒 ×2'],
+      disabled: () => false,
+      trigger: () => {
+        // 灵宝之力产出翻倍 10 秒
+        REL_STATE.buff.tempRelicPowerGain = {
+          endsAt: Date.now() + 10000,
+          mult: 2,
+        };
+      },
+    },
   },
   bagua: {
     feature: ['general'], icon: 'mdi-octagon', color: '#06b6d4',
     effect: lvl => [
-      { name: 'currencyRelPowerCap', type: 'mult', value: 1 + lvl * 0.15 },
+      { name: 'currencyRelicPowerCap', type: 'mult', value: 1 + lvl * 0.15 },
       { name: 'relicPedestal0', type: 'base', value: lvl },  // 解锁更多 pedestal 0 槽位
     ],
     glyph: () => ({}),
+  },
+
+  // 博物馆钥匙 —— gooboo museumKey（gem 锻造产出），发现即解锁灵宝殿（博物馆）
+  museumKey: {
+    feature: ['general', 'relic'], icon: 'mdi-key', color: '#7c3aed',
+    effect: lvl => [
+      { name: 'relicMuseum', type: 'unlock', value: true },
+    ],
+    glyph: () => ({ cloud: 2, coin: 3 }),
   },
 
   // ===== mining =====
@@ -193,6 +240,12 @@ const REL_ITEMS = {
     feature: ['mining'], icon: 'mdi-pickaxe', color: '#94a3b8',
     effect: lvl => [{ name: 'currencyMiningScrapGain', type: 'mult', value: Math.pow(1.25, lvl) }],
     glyph: () => ({ dust: 1, clay: 3 }),
+    active: {
+      cost: { relic_power: 8 }, feature: 'mining',
+      params: () => [], description: () => ['凝聚灵宝之力，立即析出灵石碎屑'], formula: () => ['50 灵石碎屑'],
+      disabled: () => false,
+      trigger: () => { relGrantCurrency('lm', 'lm_scrap', 50); },
+    },
   },
   energyDrink: {
     feature: ['mining'], icon: 'mdi-battery-charging', color: '#f472b6',
@@ -203,6 +256,12 @@ const REL_ITEMS = {
     feature: ['mining'], icon: 'mdi-flame', color: '#f97316',
     effect: lvl => [{ name: 'miningSmelteryTime', type: 'mult', value: 1 / Math.pow(1.1, lvl) }],
     glyph: () => ({ heat: 3, clay: 1 }),
+    active: {
+      cost: { relic_power: 5 }, feature: 'mining',
+      params: () => [], description: () => ['灵焰锻炉，立即析出灵石碎屑'], formula: () => ['30 灵石碎屑'],
+      disabled: () => false,
+      trigger: () => { relGrantCurrency('lm', 'lm_scrap', 30); },
+    },
   },
 
   // ===== village =====
@@ -213,6 +272,12 @@ const REL_ITEMS = {
       { name: 'villageMaterialGain', type: 'mult', value: 1 + lvl * 0.05 },
     ],
     glyph: () => ({ wood: 2, stone: 3 }),
+    active: {
+      cost: { relic_power: 6 }, feature: 'village',
+      params: () => [], description: () => ['木灵剑催动门徒，立即入账宗门灵石'], formula: () => ['40 宗门灵石'],
+      disabled: () => false,
+      trigger: () => { relGrantCurrency('vill', 'village_coin', 40); },
+    },
   },
   watermill: {
     feature: ['village'], icon: 'mdi-water-pump', color: '#22d3ee',
@@ -227,6 +292,12 @@ const REL_ITEMS = {
       { name: 'villageMaterialCap', type: 'mult', value: Math.pow(1.15, lvl) },
     ],
     glyph: () => ({ stone: 2, wood: 1 }),
+    active: {
+      cost: { relic_power: 6 }, feature: 'village',
+      params: () => [], description: () => ['铜钥匙开启宝库，立即入账宗门灵石'], formula: () => ['50 宗门灵石'],
+      disabled: () => false,
+      trigger: () => { relGrantCurrency('vill', 'village_coin', 50); },
+    },
   },
 
   // ===== horde =====
@@ -237,6 +308,12 @@ const REL_ITEMS = {
       { name: 'hordeHealth', type: 'mult', value: Math.pow(1.15, lvl) },
     ],
     glyph: () => ({ spike: 2 }),
+    active: {
+      cost: { relic_power: 6 }, feature: 'horde',
+      params: () => [], description: () => ['狼牙钉震慑妖物，立即拾取妖骨'], formula: () => ['25 妖骨'],
+      disabled: () => false,
+      trigger: () => { relGrantCurrency('horde', 'horde_bone', 25); },
+    },
   },
   dreamCatcher: {
     feature: ['horde'], icon: 'mdi-moon-waning-crescent', color: '#60a5fa',
@@ -244,6 +321,12 @@ const REL_ITEMS = {
       { name: 'hordeHeirloomEffect', type: 'mult', value: 1 + lvl * 0.05 },
     ],
     glyph: () => ({ dream: 3 }),
+    active: {
+      cost: { relic_power: 8 }, feature: 'horde',
+      params: () => [], description: () => ['梦境网捕获妖物残躯，立即拾取魔肉精粹'], formula: () => ['15 魔肉'],
+      disabled: () => false,
+      trigger: () => { relGrantCurrency('horde', 'horde_monsterPart', 15); },
+    },
   },
   horseshoe: {
     feature: ['horde'], icon: 'mdi-horseshoe', color: '#22c55e',
@@ -260,6 +343,12 @@ const REL_ITEMS = {
       { name: 'currencyFarmBerryGain', type: 'mult', value: Math.pow(1.3, lvl) },
     ],
     glyph: () => ({ sun: 2, cloud: 1 }),
+    active: {
+      cost: { relic_power: 6 }, feature: 'farm',
+      params: () => [], description: () => ['金灵果催熟灵田，立即收获灵菜'], formula: () => ['40 灵菜'],
+      disabled: () => false,
+      trigger: () => { relGrantCurrency('farm', 'farm_vegetable', 40); },
+    },
   },
   rainBoots: {
     feature: ['farm'], icon: 'mdi-boot', color: '#6366f1',
@@ -267,6 +356,12 @@ const REL_ITEMS = {
       { name: 'currencyFarmVegetableGain', type: 'mult', value: Math.pow(1.25, lvl) },
     ],
     glyph: () => ({ rain: 3 }),
+    active: {
+      cost: { relic_power: 6 }, feature: 'farm',
+      params: () => [], description: () => ['雨靴踏遍灵田，立即收获灵谷'], formula: () => ['40 灵谷'],
+      disabled: () => false,
+      trigger: () => { relGrantCurrency('farm', 'farm_grain', 40); },
+    },
   },
   mushroom: {
     feature: ['farm'], icon: 'mdi-mushroom', color: '#fb7185',
@@ -274,6 +369,12 @@ const REL_ITEMS = {
       { name: 'farmGoldChance', type: 'mult', value: 1 + lvl * 0.03 },
     ],
     glyph: () => ({ cloud: 2, sun: 1 }),
+    active: {
+      cost: { relic_power: 8 }, feature: 'farm',
+      params: () => [], description: () => ['灵药菇散发药香，立即收获灵果'], formula: () => ['40 灵果'],
+      disabled: () => false,
+      trigger: () => { relGrantCurrency('farm', 'farm_berry', 40); },
+    },
   },
 
   // ===== general（更多灵宝殿解锁） =====
@@ -318,11 +419,26 @@ function relEffectKeyToModuleKey(effectName) {
   return effectName;
 }
 
+/* ============ active 跨模块货币发放（等价 gooboo currency/gain） ============ */
+function relGrantCurrency(moduleId, curKey, amount) {
+  try {
+    const mod = (typeof GB_MODULES !== 'undefined') ? GB_MODULES.get(moduleId) : null;
+    if (mod && mod.core && mod.core.CUR && typeof mod.core.CUR.add === 'function') {
+      mod.core.CUR.add(curKey, amount);
+      return true;
+    }
+  } catch (e) { /* 单模块异常静默，不阻断 active 触发 */ }
+  return false;
+}
+
 /* ============ 核心状态（精确复刻 gooboo state 结构） ============ */
 const REL_STATE = {
   item: {},     // { key: { found, feature:[], level, icon, color, effect, glyph, active } }
   glyph: {},    // { key: { progress, icon, color, effect } }
   pedestal: [], // [[], [], []]
+  // 临时 buff（灵宝 active 触发）: { multKey: { endsAt: timestamp, mult: number, base: number } }
+  // 例: { tempRelicPowerGain: { endsAt: Date.now()+10000, mult: 2 } }
+  buff: {},
 };
 
 /* ============ 初始化 ============ */
@@ -361,12 +477,12 @@ function initPedestalMults() {
     REL_MULT.init('relicPedestal' + i, { feature: 'relic', baseValue: i === 0 ? 1 : 0 });
   }
   // 灵宝之力 gain/cap mult
-  REL_MULT.init('currencyRelPowerGain', { feature: 'relic', baseValue: 2 });
-  REL_MULT.init('currencyRelPowerCap', { feature: 'relic', baseValue: 50 });
+  REL_MULT.init('currencyRelicPowerGain', { feature: 'relic', baseValue: 2 });
+  REL_MULT.init('currencyRelicPowerCap', { feature: 'relic', baseValue: 50 });
 }
 
 function initCUR() {
-  REL_CUR.init('rel_power', { value: 2, cap: 50, feature: 'relic' });
+  REL_CUR.init('relic_power', { value: 2, cap: 50, feature: 'relic' });
 }
 
 /* ============ Getters（精确复刻 gooboo getter 签名） ============ */
@@ -429,39 +545,62 @@ const REL_GETTERS = {
 /* ============ effect name → feature 路由（跨模块 MULT 自动寻址） ============ */
 function effectNameToFeature(name) {
   // relic 本地
-  if (name.startsWith('currencyRelPower') || name.startsWith('relicPedestal')) return 'relic';
+  if (name.startsWith('currencyRelic') || name.startsWith('relicPedestal')) return 'relic';
+  // treasure（仙器）：XQ_MULT 用 currencyXq* 命名，treasureSlots 也归仙器槽位
+  if (name.startsWith('currencyXq') || name.startsWith('currencyTreasure') || name.startsWith('treasure')) return 'treasure';
+  // school（藏经阁）：schoolBook / currencySchool*（sc 模块键名与 gooboo 一致）
+  if (name.startsWith('school') || name.startsWith('currencySchool')) return 'school';
   // mining → lm
   if (name.startsWith('mining') || name.startsWith('currencyMining')) return 'mining';
   // village
   if (name.startsWith('village') || name.startsWith('currencyVillage') || name.startsWith('queueSpeedVillage')) return 'village';
   // horde
-  if (name.startsWith('horde')) return 'horde';
+  if (name.startsWith('horde') || name.startsWith('currencyHorde')) return 'horde';
   // farm
   if (name.startsWith('farm') || name.startsWith('currencyFarm')) return 'farm';
-  // dao / treasure
-  if (name.startsWith('currencyTreasure') || name.startsWith('treasure')) return 'dao';
+  // ruin（秘境）
+  if (name.startsWith('ruin') || name.startsWith('currencyRuin')) return 'ruin';
   return null;
 }
 
+/* gooboo effect name → 目标模块实际 mult 键名
+ * lm 模块用 lm* 前缀（映射规则与 card_core.cardEffectKeyToModuleKey 一致），
+ * 其余模块（village/horde/farm/school/treasure）沿用 gooboo 原名 */
+function effectNameToModuleKey(name) {
+  if (name.startsWith('currencyMining')) return 'currencyLm' + name.slice('currencyMining'.length);
+  if (name.startsWith('mining')) return 'lm' + name.slice('mining'.length);
+  return name;
+}
+
 /* ============ Actions（精确复刻 gooboo dispatch 签名） ============ */
+function relApplyEffect(eff, multKey, val) {
+  const feature = effectNameToFeature(eff.name);
+  // unlock 类效果（如博物馆钥匙 relicMuseum）走 GB_UNLOCK
+  if (eff.type === 'unlock') {
+    if (val && typeof GB_UNLOCK !== 'undefined' && typeof GB_UNLOCK.unlock === 'function') GB_UNLOCK.unlock(eff.name);
+    return;
+  }
+  // 同时写入：1) 本地 MULT（兜底） 2) 跨模块 MULT（GB_MODULES 自动路由）
+  if (feature === 'relic' || !feature) {
+    if (eff.type === 'mult') REL_MULT.setMult({ name: eff.name, key: multKey, value: val });
+    else if (eff.type === 'bonus') REL_MULT.setBonus({ name: eff.name, key: multKey, value: val });
+    else REL_MULT.setBase({ name: eff.name, key: multKey, value: val });
+  }
+  // 跨模块路由（如果 GB_MODULES 可用）；mining 系键名需翻译成 lm* 前缀
+  if (feature && typeof GB_MODULES !== 'undefined') {
+    const o = { feature, name: effectNameToModuleKey(eff.name), key: multKey, value: val };
+    if (eff.type === 'mult') GB_MODULES.multSetMult(o);
+    else if (eff.type === 'bonus') { if (typeof GB_MODULES.multSetBonus === 'function') GB_MODULES.multSetBonus(o); }
+    else GB_MODULES.multSetBase(o);
+  }
+}
+
 function relApply({ name, onFind }) {
   const relic = REL_STATE.item[name];
   if (!relic) return;
   relic.effect(relic.level).forEach(eff => {
     const val = typeof eff.value === 'function' ? eff.value(relic.level) : eff.value;
-    const feature = effectNameToFeature(eff.name);
-    // 同时写入：1) 本地 MULT（兜底） 2) 跨模块 MULT（GB_MODULES 自动路由）
-    if (feature === 'relic' || !feature) {
-      // relic 本地效果 → 写本地 MULT
-      if (eff.type === 'mult') REL_MULT.setMult({ name: eff.name, key: 'relic_' + name, value: val });
-      else REL_MULT.setBase({ name: eff.name, key: 'relic_' + name, value: val });
-    }
-    // 跨模块路由（如果 GB_MODULES 可用）
-    if (feature && typeof GB_MODULES !== 'undefined') {
-      const o = { feature, name: eff.name, key: 'relic_' + name, value: val };
-      if (eff.type === 'mult') GB_MODULES.multSetMult(o);
-      else GB_MODULES.multSetBase(o);
-    }
+    relApplyEffect(eff, 'relic_' + name, val);
   });
 }
 
@@ -496,25 +635,26 @@ function relApplyGlyphEffect(name) {
   const glyph = REL_STATE.glyph[name];
   glyph.effect.forEach(elem => {
     const val = elem.value(Math.floor(glyph.progress));
-    const feature = effectNameToFeature(elem.name);
-    if (feature === 'relic' || !feature) {
-      if (elem.type === 'mult') REL_MULT.setMult({ name: elem.name, key: 'relicGlyph_' + name, value: val });
-      else REL_MULT.setBase({ name: elem.name, key: 'relicGlyph_' + name, value: val });
-    }
-    if (feature && typeof GB_MODULES !== 'undefined') {
-      const o = { feature, name: elem.name, key: 'relicGlyph_' + name, value: val };
-      if (elem.type === 'mult') GB_MODULES.multSetMult(o);
-      else GB_MODULES.multSetBase(o);
-    }
+    relApplyEffect(elem, 'relicGlyph_' + name, val);
   });
 }
 
 /* ============ Tick 逻辑（精确复刻 gooboo src/js/modules/relic.js tick） ============ */
 function tick(seconds) {
-  // 1. 产 relic_power（用本地 CUR + MULT）
-  if (CUR && typeof REL_CUR.add === 'function') {
-    const gain = REL_MULT.get('currencyRelPowerGain', 2) * seconds / (SECONDS_PER_HOUR || 3600);
-    REL_CUR.add('rel_power', gain);
+  const now = Date.now();
+  // 清理过期 buff
+  for (const k in REL_STATE.buff) {
+    if (REL_STATE.buff[k].endsAt <= now) delete REL_STATE.buff[k];
+  }
+
+  // 1. 产 relic_power（用本地 CUR + MULT + 临时 buff）
+  if (typeof REL_CUR !== 'undefined' && typeof REL_CUR.add === 'function') {
+    let gain = REL_MULT.get('currencyRelicPowerGain', 2) * seconds / (SECONDS_PER_HOUR || 3600);
+    // 临时 buff（太极图等 active 触发）
+    if (REL_STATE.buff.tempRelicPowerGain) {
+      gain *= REL_STATE.buff.tempRelicPowerGain.mult;
+    }
+    REL_CUR.add('relic_power', gain);
   }
   // 2. 推进 glyph
   const stats = REL_GETTERS.glyphStats();
@@ -539,6 +679,52 @@ function tick(seconds) {
       }
     }
   }
+}
+
+/* ============ Active 灵宝使用（精确复刻 gooboo store useActive action） ============ */
+function useActive(name, option) {
+  const relic = REL_STATE.item[name];
+  if (!relic || !relic.active) return { ok: false, reason: 'noActive' };
+  const a = relic.active;
+  // disabled 检查
+  if (a.disabled && a.disabled(a.params ? a.params() : [], option)) return { ok: false, reason: 'disabled' };
+  // 消耗检查 & 扣除
+  const cost = a.cost || {};
+  for (const [curKey, amount] of Object.entries(cost)) {
+    if (REL_CUR.value(curKey) < amount) return { ok: false, reason: 'afford', need: curKey, amount };
+  }
+  for (const [curKey, amount] of Object.entries(cost)) {
+    REL_CUR.add(curKey, -amount);
+  }
+  // 记录使用次数（gooboo stat relicActivesUsed → 修仙化 rel_activesUsed）
+  if (REL_MODULE.STAT && REL_MODULE.STAT.values.rel_activesUsed) {
+    REL_MODULE.STAT.values.rel_activesUsed.value++;
+  }
+  // 触发
+  a.trigger(a.params ? a.params() : [], option);
+  return { ok: true };
+}
+
+/* ============ 总等级里程碑发遗物（对齐 gooboo store/meta.js globalLevel 40/100 送遗物） ============
+ * gooboo：globalLevel 40（relic 解锁期）送 friendlyBat，100（general 解锁期）送 notebook。
+ * 项目没有成就/gem/活动模块，里程碑扩展为 5 档，覆盖 gooboo 由成就等渠道发放的灵宝。 */
+const REL_MILESTONES = [
+  { level: 40, relic: 'pickaxe' },
+  { level: 100, relic: 'screwdriver' },
+  { level: 150, relic: 'dreamCatcher' },
+  { level: 300, relic: 'rainBoots' },
+  { level: 400, relic: 'mushroom' },
+];
+
+function checkMilestones(level) {
+  let found = 0;
+  REL_MILESTONES.forEach(m => {
+    if (level >= m.level && REL_STATE.item[m.relic] && !REL_STATE.item[m.relic].found) {
+      relFind(m.relic);
+      found++;
+    }
+  });
+  return found;
 }
 
 /* ============ 外部 API（全局暴露） ============ */
@@ -578,6 +764,7 @@ var REL_MODULE = {
   apply(name, opts) { relApply({ name, onFind: opts && opts.onFind }); },
   changePedestals(pedestals) { relChangePedestals(pedestals); },
   applyGlyphEffect(name) { relApplyGlyphEffect(name); },
+  useActive(name, option) { return useActive(name, option); },
 
   // tick
   tick,
@@ -589,8 +776,13 @@ var REL_MODULE = {
       rel_totalPowerGained: { value: 0 },
       rel_totalGlyphLevel: { value: 0 },
       rel_glyphMax: { value: 0 },
+      rel_activesUsed: { value: 0 },
     }
   },
+
+  // ======= 总等级里程碑（meta.js 在 globalLevel 提升时调用；读档时补发） =======
+  MILESTONES: REL_MILESTONES,
+  checkMilestones(level) { return checkMilestones(level); },
 
   // ======= 临时 convenience 给 view 用（替代 gem/achievement 的调用） =======
   // gooboo 没这个，我们做方便调试/测试
@@ -632,6 +824,10 @@ var REL_MODULE = {
         obj.pedestal[key] = elem;
       }
     }
+    // 灵宝碎片（card）存档
+    if (typeof CARD_MODULE !== 'undefined') {
+      try { obj.card = CARD_MODULE.saveGame(); } catch (e) {}
+    }
     return obj;
   },
 
@@ -670,6 +866,16 @@ var REL_MODULE = {
         relUpdatePedestal(parseInt(idx), arr);
       }
     }
+    // 恢复灵宝碎片（card）
+    if (data.card && typeof CARD_MODULE !== 'undefined') {
+      try { CARD_MODULE.loadGame(data.card); } catch (e) {}
+    }
+    // 补发总等级里程碑（老档 globalLevel 已过阈值但灵宝未发的场景）
+    try {
+      if (typeof GB_META !== 'undefined' && GB_META.state && typeof GB_META.state.globalLevel === 'number') {
+        checkMilestones(GB_META.state.globalLevel);
+      }
+    } catch (e) { /* meta 未加载时静默跳过 */ }
   },
 
   hardReset() {
@@ -677,6 +883,10 @@ var REL_MODULE = {
     for (const k in REL_STATE.glyph) { REL_STATE.glyph[k].progress = 0; }
     for (let i = 0; i < RELIC_PEDESTAL_AMOUNT; i++) REL_STATE.pedestal[i] = [];
     relFind('taiji'); relFind('bagua');
+    // 委托给 CARD_MODULE 统一重置灵宝碎片（跨模块效果会被 calculateCaches 里的 resetEffect 清掉）
+    if (typeof CARD_MODULE !== 'undefined' && typeof CARD_MODULE.hardReset === 'function') {
+      try { CARD_MODULE.hardReset(); } catch (e) {}
+    }
   },
 
   // ======= 初始化入口 =======

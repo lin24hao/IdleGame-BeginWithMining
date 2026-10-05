@@ -324,10 +324,46 @@ var GB_HO_VIEW = {
     const keep = this._resetScroll ? 0 : content.scrollTop;
     this._resetScroll = false;
     tabs.innerHTML = t.map(x => `<button class="gb-tab ${x.id === this.tab ? 'active' : ''}" data-hact="tab:${x.id}">${this.icon(x.icon, 18)}${x.name}</button>`).join('');
+    // 主循环每秒全量重建页面，旧 fill 元素被丢弃，CSS transition 无从触发；
+    // 先记录重建前各血条宽度，重建后让新元素从旧宽度动画到新宽度（FLIP）
+    const prevBars = this._captureBars();
     content.innerHTML = this.tab === 'heirlooms' ? this.renderHeirlooms() :
       this.tab === 'battlepass' ? this.renderBattlePass() :
       this.tab === 'souls' ? this.renderSouls() : this.renderBattle();
+    this._replayBars(prevBars);
     content.scrollTop = keep;
+  },
+  /* 血条缓动（FLIP）：重建前抓取各 data-bar 的当前宽度。
+     必须读视觉宽度而非内联宽度：旧元素动画进行到一半时，内联已是目标值，读它会倒跳。 */
+  _captureBars() {
+    const map = {};
+    if (!this.el) return map;
+    this.el.querySelectorAll('.ho-barstat[data-bar]').forEach(row => {
+      const fill = row.querySelector('.ho-barstat-fill');
+      if (!fill) return;
+      const rowW = fill.parentElement.clientWidth;
+      if (rowW <= 0) return;
+      const pct = fill.getBoundingClientRect().width / rowW * 100;
+      map[row.getAttribute('data-bar')] = Math.max(0, Math.min(100, pct));
+    });
+    return map;
+  },
+  /* 重建后：fill 先无过渡回退到旧宽度，强制 reflow 后再恢复过渡动画到新宽度 */
+  _replayBars(prev) {
+    if (!this.el || !prev) return;
+    this.el.querySelectorAll('.ho-barstat[data-bar]').forEach(row => {
+      const from = prev[row.getAttribute('data-bar')];
+      if (from === undefined) return;
+      const fill = row.querySelector('.ho-barstat-fill');
+      if (!fill) return;
+      const to = parseFloat(fill.style.width) || 0;
+      if (to === from) return;
+      fill.style.transition = 'none';
+      fill.style.width = from + '%';
+      void fill.offsetWidth;
+      fill.style.transition = '';
+      fill.style.width = to + '%';
+    });
   },
   getTabs() {
     const t = [{ id: 'horde', name: '降妖', icon: 'mdi-account-group' }];

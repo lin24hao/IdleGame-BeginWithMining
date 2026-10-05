@@ -71,8 +71,8 @@ var GB_GEN_VIEW = {
   },
 
   renderHeader() {
-    const cleared = GEN_MODULE.STAT.values.gen_stagesCleared.value;
-    const completed = GEN_MODULE.STAT.values.gen_questsCompleted.value;
+    const cleared = (GEN_MODULE?.STAT?.values?.gen_stagesCleared?.value) || 0;
+    const completed = (GEN_MODULE?.STAT?.values?.gen_questsCompleted?.value) || 0;
 
     // 4 种辅助玩法货币展示
     const curList = [
@@ -126,14 +126,15 @@ var GB_GEN_VIEW = {
       unlockHint = threshold ? `需全局道行 Lv${threshold}` : '尚未解锁';
     }
 
-    // 收集任务线状态 —— 只渲染 unlocked 的 quest
-    const qKeysAll = Object.keys(gen.quests);
-    const qKeysUnlocked = locked ? [] : qKeysAll.filter(qk => GEN_STATE.quests[gk] && GEN_STATE.quests[gk][qk] && GEN_STATE.quests[gk][qk].unlocked);
+    // 收集任务线状态 —— 渲染所有 quest，未解锁的显示为锁定状态
+    const qKeysAll = Object.keys(gen.quests || {});
+    const qs = (typeof GEN_STATE !== 'undefined' && GEN_STATE.quests) || {};
 
-    const questsHtml = locked ? '' : qKeysUnlocked.map((qk, qi) => {
+    const questsHtml = locked ? '' : qKeysAll.map((qk, qi) => {
       const quest = gen.quests[qk];
-      const qState = GEN_STATE.quests[gk] && GEN_STATE.quests[gk][qk];
+      const qState = (qs[gk] && qs[gk][qk]) || null;
       if (!qState) return '';
+      const questLocked = !qState.unlocked;
 
       const curStage = qState.stage;
       const totalStages = quest.stages.length;
@@ -148,7 +149,7 @@ var GB_GEN_VIEW = {
         const doneList = quest.stages.slice(0, curStage).map((s, i) => `
           <div class="gen-stage-done">
             <span class="gen-stage-done-icon">${GB_ICON.icon('mdi-check-circle', 14)}</span>
-            <span class="gen-stage-done-label">Stage ${i + 1}</span>
+            <span class="gen-stage-done-label">阶段 ${i + 1}</span>
             <span class="gen-stage-done-reward">${this.renderReward(s.reward, gk)}</span>
           </div>`).join('');
         doneStagesHtml = `<div class="gen-stage-dones">${doneList}</div>`;
@@ -169,8 +170,9 @@ var GB_GEN_VIEW = {
       let completedHtml = '';
       if (isCompleted) {
         const lastStage = quest.stages[totalStages - 1];
-        const isLastUnlocked = qi === qKeysUnlocked.length - 1;
-        const hasMoreLocked = qKeysUnlocked.length < qKeysAll.length;
+        const unlockedQuests = qKeysAll.filter(k => qs[gk] && qs[gk][k] && qs[gk][k].unlocked);
+        const isLastUnlocked = qk === unlockedQuests[unlockedQuests.length - 1];
+        const hasMoreLocked = unlockedQuests.length < qKeysAll.length;
         const unlockTip = isLastUnlocked && hasMoreLocked
           ? `<div class="gen-chain-hint">${GB_ICON.icon('mdi-link-variant', 14)} 完成此线后自动解锁下一条任务</div>`
           : '';
@@ -183,6 +185,18 @@ var GB_GEN_VIEW = {
             ${lastStage ? `<div class="gen-done-reward">最终奖励：${this.renderReward(lastStage.reward, gk)}</div>` : ''}
             ${unlockTip}
             ${allDoneTip}
+          </div>`;
+      }
+
+      // 未解锁的 quest —— 显示锁定状态，不渲染 stage 内容
+      if (questLocked) {
+        return `
+          <div class="gen-quest locked">
+            <div class="gen-quest-head">
+              <span class="gen-quest-name">${GB_ICON.icon('mdi-lock-outline', 14)} ${quest.name}</span>
+              <span class="gen-quest-progress" style="color:var(--text-dim);">🔒 未解锁</span>
+            </div>
+            <div class="gen-quest-locked-hint">完成前置任务后自动解锁</div>
           </div>`;
       }
 
@@ -206,8 +220,8 @@ var GB_GEN_VIEW = {
 
     // 仙尊整体进度
     const totalQuests = qKeysAll.length;
-    const unlockedCount = qKeysUnlocked.length;
-    const doneQuests = locked ? 0 : Object.values(GEN_STATE.quests[gk] || {}).filter(q => q.completed).length;
+    const unlockedCount = qKeysAll.filter(k => qs[gk] && qs[gk][k] && qs[gk][k].unlocked).length;
+    const doneQuests = locked ? 0 : Object.values((qs[gk]) || {}).filter(q => q.completed).length;
     const genProgress = locked ? 0 : (doneQuests / Math.max(1, totalQuests)) * 100;
 
     const expanded = this._expanded[gk] && !locked;
@@ -224,8 +238,8 @@ var GB_GEN_VIEW = {
       : '';
 
     return `
-      <div class="gen-card ${locked ? 'locked' : ''} ${expanded ? 'expanded' : ''}">
-        <div class="gen-card-head" ${!locked ? `data-gact="toggle:${gk}" style="cursor:pointer;"` : ''}>
+      <div class="gen-card ${locked ? 'locked' : ''} ${expanded ? 'expanded' : ''}" ${!locked ? `data-gact="toggle:${gk}"` : ''}>
+        <div class="gen-card-head" ${!locked ? `style="cursor:pointer;"` : ''}>
           <div class="gen-avatar">
             ${GB_ICON.icon(locked ? 'mdi-lock' : gen.icon, 28)}
           </div>
@@ -332,13 +346,27 @@ var GB_GEN_VIEW = {
     }
     if (task.type === 'stat') {
       if (typeof GB_MODULES !== 'undefined') {
-        const mod = GB_MODULES._byPrefix[task.feature];
+        const prefix = task.feature || task.name.split('_')[0];
+        const mod = GB_MODULES._byPrefix[prefix];
         if (mod && mod.core && mod.core.STAT && mod.core.STAT.values) {
           const statItem = mod.core.STAT.values[task.name];
           if (statItem) {
             if (typeof statItem === 'number') return statItem;
             return statItem.total !== undefined ? statItem.total : (statItem.value !== undefined ? statItem.value : 0);
           }
+        }
+      }
+      return 0;
+    }
+    if (task.type === 'upgrade') {
+      if (typeof GB_MODULES !== 'undefined') {
+        const prefix = task.feature || task.name.split('_')[0];
+        const mod = GB_MODULES._byPrefix[prefix];
+        if (mod && mod.core && mod.core.UPG && mod.core.UPG.levels) {
+          const lvl = mod.core.UPG.levels;
+          if (lvl[task.name] !== undefined) return lvl[task.name];
+          const fullKey = prefix + '_' + task.name;
+          if (lvl[fullKey] !== undefined) return lvl[fullKey];
         }
       }
       return 0;

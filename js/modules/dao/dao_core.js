@@ -349,6 +349,16 @@ const DAO_FORGE = {
     return { ok: true, relic: d.relic };
   },
 
+  /* forge def.feature → GB_MODULES feature key 解析
+   * FORGE_RELICS 的 feature 混用 gooboo feature 名（village/horde/treasure/relic）
+   * 和模块 keyPrefix（lm/fa/ruin），统一解析成 _featureMap 可识别的 key */
+  _resolveFeature(f) {
+    if (!f || typeof GB_MODULES === 'undefined') return 'dao';
+    if (GB_MODULES._featureMap[f]) return f;
+    const alias = { lm: 'mining', fa: 'farm', mine: 'mining' };
+    return alias[f] || (GB_MODULES._byPrefix[f] ? f : 'dao');
+  },
+
   /* 应用跨界神器效果（需要 DAO_DATA.FORGE_RELICS 定义） */
   applyRelic(relicKey) {
     const relic = this.state[relicKey];
@@ -358,10 +368,18 @@ const DAO_FORGE = {
     if (!def) return;
     const effects = typeof def.effect === 'function' ? def.effect(relic.level) : def.effect;
     effects.forEach(eff => {
+      // unlock 类效果（如博物馆钥匙）走 GB_UNLOCK
+      if (eff.type === 'unlock') {
+        if (eff.value && typeof GB_UNLOCK !== 'undefined' && typeof GB_UNLOCK.unlock === 'function') GB_UNLOCK.unlock(eff.name);
+        return;
+      }
+      const o = { feature: this._resolveFeature(def.feature), name: eff.name, key: 'forge_' + relicKey, value: eff.value };
       if (eff.type === 'mult') {
-        GB_MODULES.multSetMult({ feature: 'dao', name: eff.name, key: 'forge_' + relicKey, value: eff.value });
-      } else if (eff.type === 'base') {
-        GB_MODULES.multSetBase({ feature: 'dao', name: eff.name, key: 'forge_' + relicKey, value: eff.value });
+        GB_MODULES.multSetMult(o);
+      } else if (eff.type === 'bonus') {
+        if (typeof GB_MODULES.multSetBonus === 'function') GB_MODULES.multSetBonus(o);
+      } else {
+        GB_MODULES.multSetBase(o);
       }
     });
   },
@@ -373,7 +391,7 @@ const DAO_FORGE = {
       const def = DAO_DATA.FORGE_RELICS[key];
       const effects = typeof def.effect === 'function' ? def.effect(1) : def.effect;
       effects.forEach(eff => {
-        GB_MODULES.multRemoveKey({ feature: 'dao', name: eff.name });
+        GB_MODULES.multRemoveKey({ feature: this._resolveFeature(def.feature), name: eff.name });
       });
     }
   }

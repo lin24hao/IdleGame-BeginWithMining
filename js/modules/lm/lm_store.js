@@ -495,11 +495,12 @@ const LM_STORE = {
         },
         addIngredient({ state, rootState, rootGetters, commit }, name) {
             let compress = 0;
-            if (rootState.unlock[state.ingredient[name].compressUnlock].use) {
+            const recipe = state.ingredient && state.ingredient[name];
+            if (recipe && recipe.compressUnlock && rootState.unlock && rootState.unlock[recipe.compressUnlock] && rootState.unlock[recipe.compressUnlock].use) {
                 const currency = rootState.currency['lm_' + name];
                 const quality = rootGetters['mult/get']('lmOreQuality');
                 let limit = Math.pow(LM_CRAFTING_COMPRESSION, compress + 1);
-                while (currency.value >= (limit / quality) && currency.cap >= limit) {
+                while (currency && currency.value >= (limit / quality) && currency.cap >= limit) {
                     compress++;
                     limit *= LM_CRAFTING_COMPRESSION;
                 }

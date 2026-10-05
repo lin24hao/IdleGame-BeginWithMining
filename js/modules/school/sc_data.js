@@ -306,7 +306,7 @@ const SC_MODULE = {
     goldenDust: { color: 'amber', icon: 'mdi-timer-sand', display: 'int', overcapMult: 0, overcapFunction(amount) {
       SCTORE.commit('school/updateKey', { key: 'bonusDust', value: (SC_RT.state.bonusDust || 0) + amount });
     }, capMult: { baseValue: 8000 } },
-    examPass: { color: 'pale-blue', icon: 'mdi-ticket-account', display: 'int' }
+    examPass: { color: 'pale-blue', icon: 'mdi-ticket-account', display: 'int', capMult: { baseValue: 3, round: true } }
   },
   /* 外部四类宝石（考签/跳书/藏经弟子），feature 'gem' */
   gems: {
@@ -317,11 +317,17 @@ const SC_MODULE = {
   upgrade: SC_UPGRADES,
   relic: SC_RELICS,
 
-  /* 每日考签 / 金尘溢出转移（gooboo school.js tick） */
+  /* 每小时考签 / 金尘溢出转移（gooboo school.js tick） */
   tick(seconds, oldTime, newTime) {
-    const dayDiff = Math.floor(newTime / SC_SECONDS_PER_DAY) - Math.floor(oldTime / SC_SECONDS_PER_DAY);
-    if (dayDiff > 0) {
-      SCTORE.dispatch('currency/gain', { feature: 'school', name: 'examPass', amount: dayDiff });
+    // 每 3600 秒（1 小时）发 1 张考签，cap=3
+    const HOUR = 7200;
+    const passBefore = Math.floor(oldTime / HOUR);
+    const passAfter = Math.floor(newTime / HOUR);
+    const gain = passAfter - passBefore;
+    if (gain > 0) {
+      const curVal = SC_CUR.value('school_examPass');
+      const cap = SC_CUR.cap('school_examPass') || 3;
+      SCTORE.dispatch('currency/gain', { feature: 'school', name: 'examPass', amount: Math.min(gain, cap - curVal) }, { root: true });
     }
     if (SC_RT.state.bonusDust > 0 && SC_CUR.value('school_goldenDust') < SC_CUR.cap('school_goldenDust')) {
       const amount = Math.min(seconds, SC_RT.state.bonusDust, SC_CUR.cap('school_goldenDust') - SC_CUR.value('school_goldenDust'));
@@ -365,6 +371,12 @@ const SC_MODULE = {
     }
     if (state.bonusDust > 0) obj.bonusDust = state.bonusDust;
     if (state.multipass > 1) obj.multipass = state.multipass;
+    // 存 currency（examPass / goldenDust）
+    const examPass = SC_CUR.value('school_examPass');
+    const goldenDust = SC_CUR.value('school_goldenDust');
+    if (examPass !== undefined || goldenDust !== undefined) {
+      obj.currency = { examPass, goldenDust };
+    }
     // 附带外部宝石余额（蓝宝/翡翠/红宝）
     const gems = {};
     ['gem_sapphire', 'gem_emerald', 'gem_ruby'].forEach(k => {
@@ -399,6 +411,11 @@ const SC_MODULE = {
       for (const [k, v] of Object.entries(data.gems)) {
         SC_CUR.values['gem_' + k] = v;
       }
+    }
+    // 恢复 currency（examPass / goldenDust）
+    if (data.currency) {
+      if (data.currency.examPass !== undefined) SC_CUR.values['school_examPass'] = data.currency.examPass;
+      if (data.currency.goldenDust !== undefined) SC_CUR.values['school_goldenDust'] = data.currency.goldenDust;
     }
   }
 };

@@ -144,6 +144,10 @@ var GB_META = {
         GB_UNLOCK.unlock(key);
       }
     });
+    // 总等级里程碑发遗物（对齐 gooboo store/meta.js globalLevel 40/100 送 friendlyBat/notebook）
+    if (typeof REL_MODULE !== 'undefined' && typeof REL_MODULE.checkMilestones === 'function') {
+      try { REL_MODULE.checkMilestones(newLevel); } catch (e) { /* relic 未加载时静默跳过 */ }
+    }
   },
 
   /* GB_UNLOCK.unlock() 回调 — 发通知 / 连锁 */

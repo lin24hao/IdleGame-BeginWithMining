@@ -50,15 +50,17 @@ var GB_LM_VIEW = {
     // upgradeLmXxxCap → 驼峰 key 去 UPGRADE 字典查（upgName 内部去 lm_ 前缀后查）
     const uCap = name.match(/^upgradeLm(.+)Cap$/);
     if (uCap) return this.upgName('lm_' + uCap[1]) + '上限';
-    // lmOreCap / lmDamage → 先驼峰查 TERMS/STAT/UPGRADE，再 lower 查（字典 key 混合两种格式）
+    // lmOreCap / lmDamage → 驼峰查 TERMS/STAT/UPGRADE
     const lm = name.match(/^lm(.+)$/);
     if (lm) {
-      const camel = lm[1];          // 驼峰：OreCap
-      const low = camel.toLowerCase(); // 全小写：orecap
+      const camel = lm[1];          // PickaxeCraftingPower（首字母大写驼峰）
+      const decamel = camel[0].toLowerCase() + camel.slice(1); // pickaxeCraftingPower（首字母小写驼峰）
+      const low = camel.toLowerCase(); // pickaxecraftingpower（全小写）
       const tb = LM_TEXT.TERMS; const st = LM_TEXT.STAT; const up = LM_TEXT.UPGRADE;
-      if (tb && (tb[camel] || tb[low])) return tb[camel] || tb[low];
-      if (st && (st[camel] || st[low])) return st[camel] || st[low];
-      if (up && (up[camel] || up[low])) return up[camel] || up[low];
+      const lookup = (dict) => dict && (dict[decamel] || dict[camel] || dict[low]);
+      if (lookup(tb)) return tb[decamel] || tb[camel] || tb[low];
+      if (lookup(st)) return st[decamel] || st[camel] || st[low];
+      if (lookup(up)) return up[decamel] || up[camel] || up[low];
       return camel.replace(/([A-Z])/g, ' $1').trim();
     }
     return name;
@@ -112,6 +114,10 @@ var GB_LM_VIEW = {
   curVal(k) { return CUR.value(k); },
   icon(n, s, c) { return GB_ICON.icon(n, s || 16, c || ''); },
   rimeLatin() { return ''; },
+  _multGet(key, def) {
+    try { const v = LM_RT && LM_RT.MULT && LM_RT.MULT.get(key); if (v != null && v !== undefined) return v; } catch (e) {}
+    return def != null ? def : 1;
+  },
 
   /* ---------- 生命周期 ---------- */
   mount(root) {
@@ -228,8 +234,41 @@ var GB_LM_VIEW = {
       case 'craft': try { LM_RT.craftPickaxe(); } catch (e) {} break;
       case 'prestige': try { LM_RT.prestige(); } catch (e) {} break;
       case 'toggleEnh': try { LM_RT.toggleEnhancements(); } catch (e) {} break;
-      case 'addIng': try { LM_RT.addIngredient(arg); } catch (e) {} break;
+      case 'addIng': try {
+        const st = LM_RT.lmState;
+        const slots = Math.max(1, this._multGet('lmPickaxeCraftingSlots', 3));
+        if ((st.ingredientList || []).length >= slots) return;
+        LM_RT.addIngredient(arg);
+      } catch (e) {} break;
       case 'rmIng': try { LM_RT.removeIngredient(Number(arg)); } catch (e) {} break;
+      case 'upCompress': try {
+        const st = LM_RT.lmState;
+        const idx = Number(arg);
+        if (st.ingredientList[idx]) {
+          LM_RT.store.commit('lm/updateIngredientKey', { index: idx, key: 'compress', value: (st.ingredientList[idx].compress || 0) + 1 });
+        }
+      } catch (e) {} break;
+      case 'downCompress': try {
+        const st = LM_RT.lmState;
+        const idx = Number(arg);
+        if (st.ingredientList[idx] && (st.ingredientList[idx].compress || 0) > 0) {
+          LM_RT.store.commit('lm/updateIngredientKey', { index: idx, key: 'compress', value: st.ingredientList[idx].compress - 1 });
+        }
+      } catch (e) {} break;
+      case 'resinPlus': try {
+        const st = LM_RT.lmState;
+        const max = this._multGet('lmResinMax', 0);
+        const avail = CUR.value('lm_resin') || 0;
+        if (st.resin < max && st.resin < avail) {
+          LM_RT.store.commit('lm/updateKey', { key: 'resin', value: st.resin + 1 });
+        }
+      } catch (e) {} break;
+      case 'resinMinus': try {
+        const st = LM_RT.lmState;
+        if (st.resin > 0) {
+          LM_RT.store.commit('lm/updateKey', { key: 'resin', value: st.resin - 1 });
+        }
+      } catch (e) {} break;
       case 'selectEnh': try { LM_RT.selectEnhancement(arg); } catch (e) {} break;
       case 'enhance': try { LM_RT.enhance(); } catch (e) {} break;
       case 'smelt': try { LM_RT.addToSmeltery(arg); } catch (e) {} break;
@@ -1111,21 +1150,87 @@ var GB_LM_VIEW = {
       const stats = G('pickaxeStats') || { quality: 0, purity: 0, baseQuality: 0, cleanse: 0, impurity: 0, alloying: 1 };
       const canAfford = G('pickaxeCanAfford');
       const list = st.ingredientList || [];
+      const pickaxePower = st.pickaxePower || 8;
+      const slots = Math.max(1, this._multGet('lmPickaxeCraftingSlots', 3));
+      const premiumSlots = this._multGet('lmPickaxePremiumCraftingSlots', 0);
+      const resinMax = this._multGet('lmResinMax', 0);
+      const resinAmount = this.curVal('lm_resin') || 0;
+      const resin = st.resin || 0;
+      const canCraft = list.length > 0 && canAfford && stats.purity >= 0.001;
+      const quality = stats.quality || 0;
+      const purity = stats.purity || 0;
+      const finalPower = quality * purity;
+      const upgradeChance = G('pickaxeUpgradeChance') || 0;
+      const emptySlots = Math.max(0, slots - list.length);
+      // 上排：可点击的矿图标（玩家持有数量 > 0 才显示）
+      const clickableOres = Object.keys(st.ingredient || {}).filter(k => {
+        try { return this.curVal('lm_' + k) > 0; } catch (e) { return false; }
+      }).map(k => {
+        const def = CUR.defs['lm_' + k];
+        const col = def ? 'c-' + def.color : 'c-grey';
+        const count = this.fmt(this.curVal('lm_' + k) || 0);
+        const disabled = list.length >= slots ? 'disabled' : '';
+        return `<span class="lm-craft-ore ${col} ${disabled}" data-act="addIng:${k}" data-tip="加入 ${this.curName('lm_'+k)}">${GB_ICON.icon(def&&def.icon?def.icon:'mdi-chart-bubble',20)}<span class="lm-craft-ore-count">${count}</span></span>`;
+      }).join('');
+      // 中排：已加入槽位 + 空槽占位
+      const slotDefs = st.ingredient || {};
+      const filledSlots = list.map((ing, i) => {
+        const ore = slotDefs[ing.name] || {};
+        const def = CUR.defs['lm_' + ing.name];
+        const col = def ? 'c-' + def.color : 'c-grey';
+        const compress = ing.compress || 0;
+        const amount = Math.pow(5, compress);  // LM_CRAFTING_COMPRESSION = 5
+        const isPremium = i < premiumSlots;
+        const canCompress = !!st.ingredient[ing.name]?.compressUnlock;
+        const compressKey = st.ingredient[ing.name]?.compressUnlock;
+        const canCompressNow = canCompress && (!compressKey || UNLOCK.isUnlocked(compressKey));
+        const canUpgradeCompress = compress < 99;
+        return `<div class="lm-craft-slot ${col} ${isPremium?'premium':''}" data-tip="${this.curName('lm_'+ing.name)} 品质 ×${this.fmt(ore.power||0)} 杂质×${this.fmt(ore.impurity||1)}">
+          ${GB_ICON.icon(def&&def.icon?def.icon:'mdi-chart-bubble',24)}
+          <span class="lm-craft-slot-amt">${this.fmt(amount)}</span>
+          ${canCompressNow ? `<button class="lm-craft-slot-btn up" data-act="upCompress:${i}" ${canUpgradeCompress?'':'disabled'} title="压缩升级">${GB_ICON.icon('mdi-chevron-up',12)}</button>` : ''}
+          ${canCompressNow && compress > 0 ? `<button class="lm-craft-slot-btn down" data-act="downCompress:${i}" title="压缩降级">${GB_ICON.icon('mdi-chevron-down',12)}</button>` : ''}
+          <button class="lm-craft-slot-btn close" data-act="rmIng:${i}" title="移除">${GB_ICON.icon('mdi-close',12)}</button>
+        </div>`;
+      }).join('');
+      const emptySlotHtml = Array(emptySlots).fill(`<div class="lm-craft-slot empty"></div>`).join('');
+      // resin 调节
+      let resinHtml = '';
+      if (resinMax > 0) {
+        const resinMult = resin * 0.3 + 1;
+        const resinPurityMult = resin * 0.25 + 1;
+        resinHtml = `<div class="lm-craft-resin" data-tip="灵脂加成（×${this.fmt(resinMult)} 品质，×${this.fmt(resinPurityMult)} 纯度）">
+          ${GB_ICON.icon('mdi-water',16)}
+          <button class="gb-btn icon small" data-act="resinMinus" ${resin<=0?'disabled':''}>-</button>
+          <span>${resin}</span>
+          <button class="gb-btn icon small" data-act="resinPlus" ${resin>=resinMax||resin<=resinAmount?'disabled':''}>+</button>
+        </div>`;
+      }
       return `<div class="gb-card">
-        <div class="hwrap">
-          ${Object.keys(st.ingredient || {}).filter(k => (st.ingredient[k] || 0) > 0).map(k => {
-            const def = CUR.defs['lm_' + k];
-            const col = def ? 'c-' + def.color : 'c-grey';
-            return `<span class="gb-chip clickable ${col}" data-act="addIng:${k}" data-tip="加入 ${this.curName('lm_'+k)} 以铸造。">${GB_ICON.icon(def&&def.icon?def.icon:'mdi-chart-bubble',13)}${this.curName('lm_'+k)}</span>`;
-          }).join('')}
+        <div class="lm-craft-current">
+          <span class="dim">当前锋锐</span>
+          <span class="c-yellow" style="font-size:18px;font-weight:700;margin:0 4px;">${this.fmt(st.pickaxePower)}</span>
+          ${list.length > 0 ? `
+            <span class="dim" style="margin:0 4px;">→</span>
+            <span class="${stats.quality > st.pickaxePower ? 'c-green' : stats.quality === st.pickaxePower ? 'c-blue' : 'c-red'}" style="font-size:16px;font-weight:600;">${this.fmt(stats.quality)}</span>
+          ` : ''}
         </div>
-        <div class="hstack mt8" style="flex-wrap:wrap;">
-          ${list.map((ing, i) => `<div class="stat-tile" style="position:relative;padding:8px;" data-tip="点击移除该灵材。"><button class="gb-btn icon" style="width:24px;height:24px;" data-act="rmIng:${i}">${GB_ICON.icon('mdi-close',14)}</button>${this.curName('lm_' + ing)}</div>`).join('') || '<span class="dim" style="font-size:12px;">选择灵材来铸造灵锄</span>'}
+        ${clickableOres ? `<div class="lm-craft-ores">${clickableOres}</div>` : '<div class="dim center" style="padding:8px;">暂无可加入的灵材，先挖一些矿再来铸造。</div>'}
+        <div class="lm-craft-slots">${filledSlots}${emptySlotHtml}</div>
+        ${list.length > 0 ? `
+        <div class="lm-craft-props">
+          <span class="dim">纯度</span>
+          <span class="c-blue" style="font-weight:600;">${this.fmt(purity*100,1)}%</span>
+          <span class="dim" style="margin:0 4px;">|</span>
+          <span class="dim">合金</span>
+          <span class="c-cyan" style="font-weight:600;">×${this.fmt(stats.alloying)}</span>
+          ${upgradeChance > 0 ? `<span class="dim" style="margin:0 4px;">|</span><span class="dim">升级</span><span style="color:var(--success);font-weight:600;">↑${this.fmt(upgradeChance*100,1)}%</span>` : ''}
+        </div>` : '<div class="dim center" style="font-size:12px;margin:4px 0;">选择灵材来铸造灵锄</div>'}
+        <div class="lm-craft-actions">
+          ${resinHtml}
+          <button class="gb-btn ${canCraft ? (upgradeChance > 0 ? 'success' : 'primary') : 'error'}" ${canCraft ? '' : 'disabled'} data-act="craft">${GB_ICON.icon('mdi-hammer',16)}铸造 · ${this.fmt(quality)}</button>
         </div>
-        <div class="hstack mt8" style="justify-content:space-between;">
-          <div><span class="c-red" style="font-weight:600;">${this.fmt(stats.quality)}</span><span class="dim" style="font-size:12px;">&nbsp;✦ 卓越</span><span class="dim" style="font-size:12px;"> 纯度 ${(stats.purity*100).toFixed(1)}%</span></div>
-          <button class="gb-btn ${stats.purity>=0.001? 'success':'error'}" ${list.length===0||!canAfford?'disabled':''} data-act="craft">${GB_ICON.icon('mdi-hammer',16)}铸造 · ${this.fmt(stats.quality)}</button>
-        </div>
+        ${stats.purity < 0.001 && list.length > 0 ? `<div class="c-red" style="font-size:12px;text-align:center;margin-top:4px;">纯度过低（需要 ≥ 0.1%）</div>` : ''}
       </div>`;
     }
     // enh

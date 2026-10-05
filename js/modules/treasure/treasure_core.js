@@ -217,17 +217,39 @@ function makeItem(type, tier) {
 }
 
 // ======= 模块自带 MULT =======
+/* 对齐 gooboo mult 语义：(baseValue + Σ baseValues) × Π multValues + Σ bonusValues
+ * base/mult/bonus 为缓存字段（get 之外的旧代码有直接读字段）。
+ * treasureSlots 有多个 base 来源（初始 10 + 乾坤袋 + coin 符文），必须按 key 聚合 */
 const XQ_MULT = { values: {} };
 XQ_MULT.init = function(name, def) {
-  if (!XQ_MULT.values[name]) XQ_MULT.values[name] = { base: def.baseValue || 1, mult: 1, bonus: 0 };
+  if (!XQ_MULT.values[name]) {
+    const baseValue = def.baseValue || 1;
+    XQ_MULT.values[name] = Object.assign({ baseValue, baseValues: {}, multValues: {}, bonusValues: {}, base: baseValue, mult: 1, bonus: 0 }, def);
+  }
+};
+XQ_MULT._recalc = function(v) {
+  let base = v.baseValue || 0, mult = 1, bonus = 0;
+  for (const k in v.baseValues) base += v.baseValues[k];
+  for (const k in v.multValues) mult *= v.multValues[k];
+  for (const k in v.bonusValues) bonus += v.bonusValues[k];
+  v.base = base; v.mult = mult; v.bonus = bonus;
 };
 XQ_MULT.get = function(name) {
   const v = XQ_MULT.values[name]; if (!v) return 1;
-  const r = v.base * v.mult + v.bonus; return v.round ? Math.round(r) : r;
+  const r = (v.base || 0) * (v.mult || 1) + (v.bonus || 0); return v.round ? Math.round(r) : r;
 };
-XQ_MULT.setMult = function(o) { if (!XQ_MULT.values[o.name]) XQ_MULT.init(o.name, {}); XQ_MULT.values[o.name].mult = o.value; };
-XQ_MULT.setBase = function(o) { if (!XQ_MULT.values[o.name]) XQ_MULT.init(o.name, {}); XQ_MULT.values[o.name].base = o.value; };
-XQ_MULT.setBonus = function(o) { if (!XQ_MULT.values[o.name]) XQ_MULT.init(o.name, {}); XQ_MULT.values[o.name].bonus = o.value; };
+XQ_MULT.setMult = function(o) {
+  if (!XQ_MULT.values[o.name]) XQ_MULT.init(o.name, {});
+  const v = XQ_MULT.values[o.name]; v.multValues[o.key || '_'] = o.value; XQ_MULT._recalc(v);
+};
+XQ_MULT.setBase = function(o) {
+  if (!XQ_MULT.values[o.name]) XQ_MULT.init(o.name, {});
+  const v = XQ_MULT.values[o.name]; v.baseValues[o.key || '_'] = o.value; XQ_MULT._recalc(v);
+};
+XQ_MULT.setBonus = function(o) {
+  if (!XQ_MULT.values[o.name]) XQ_MULT.init(o.name, {});
+  const v = XQ_MULT.values[o.name]; v.bonusValues[o.key || '_'] = o.value; XQ_MULT._recalc(v);
+};
 XQ_MULT.removeKeyAnywhere = function() {};
 
 // ======= 模块自带 CUR =======
